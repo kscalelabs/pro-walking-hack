@@ -1,0 +1,7 @@
+# .gitignore
+
+# Rust
+target/
+
+# MacOS
+.DS_Store
