@@ -6,3 +6,7 @@ Cargo.lock
 
 # MacOS
 .DS_Store
+
+# Large files.
+*.onnx
+lib/

@@ -1,0 +1,13 @@
+[package]
+name = "motors"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+socketcan = { version = "3.3.0", features = ["tokio"] }
+tokio = { version = "1.38.1", features = ["full"] }
+futures-util = "0.3.30"
+
+[[bin]]
+name = "motors"
+path = "src/main.rs"

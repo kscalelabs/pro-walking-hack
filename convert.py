@@ -152,7 +152,7 @@ class Actor(nn.Module):
         imu_ang_vel: Tensor,
         imu_euler_xyz: Tensor,
         buffer: Tensor,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Runs the actor model forward pass.
 
         Args:
@@ -173,7 +173,8 @@ class Actor(nn.Module):
                 pass, it should be all zeros.
 
         Returns:
-            The torques to apply to the dofs, along with the next buffer.
+            The torques to apply to the DoFs, the actions taken, and the
+            next buffer.
         """
         phase = t * 0.02 / 0.5  # 50 Hz policy, 0.5 sec cycle time
         sin_pos = torch.sin(2 * torch.pi * phase)
@@ -207,12 +208,12 @@ class Actor(nn.Module):
 
         x = torch.cat((buffer, new_x), dim=0)
 
-        actions = self.policy(x.unsqueeze(0))
+        actions = self.policy(x.unsqueeze(0)).squeeze(0)
         actions_scaled = actions * self.action_scale
         p_gains = self.p_gains
         d_gains = self.d_gains
         torques = p_gains * (actions_scaled + self.default_dof_pos - dof_pos) - d_gains * dof_vel
-        return torques, x[41:]
+        return torques, actions, x[41:]
 
 
 def convert() -> None:
@@ -248,8 +249,8 @@ def convert() -> None:
     # Run the model once, for debugging.
     # a_model(*input_tensors)
 
-    jit_model = torch.jit.trace(a_model, input_tensors)
-    jit_model.save("position_control.jit")
+    jit_model = torch.jit.script(a_model)
+    torch.onnx.export(jit_model, input_tensors, "position_control.onnx")
 
 
 if __name__ == "__main__":
