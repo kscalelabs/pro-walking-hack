@@ -7,3 +7,12 @@ edition = "2021"
 socketcan = { version = "3.3.0", features = ["tokio"] }
 tokio = { version = "1.38.1", features = ["full"] }
 futures-util = "0.3.30"
+ort = "1.16.3"
+
+[[bin]]
+name = "run_dummy"
+path = "src/bin/run_dummy.rs"
+
+[[bin]]
+name = "run_full"
+path = "src/bin/run_full.rs"

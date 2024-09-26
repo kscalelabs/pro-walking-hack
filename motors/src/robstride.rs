@@ -10,6 +10,7 @@ pub enum StopMode {
 pub struct RobStrideUtils {
     id: u8,
 }
+
 impl RobStrideUtils {
     pub fn new(id: u8) -> Self {
         Self { id }

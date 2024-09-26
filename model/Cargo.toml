@@ -1,0 +1,8 @@
+[package]
+name = "robot-model"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures-util = "0.3.30"
+ort = "1.16.3"

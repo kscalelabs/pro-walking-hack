@@ -1,13 +1,13 @@
 mod robstride;
 
-use std::time::Duration;
 use futures_util::StreamExt;
-use socketcan::{tokio::CanSocket, CanFrame, Result, EmbeddedFrame};
+use robstride::RobStrideUtils;
+use robstride::StopMode;
+use socketcan::{tokio::CanSocket, CanFrame, EmbeddedFrame, Result};
+use std::time::Duration;
 use tokio;
 use tokio::io::AsyncReadExt;
 use tokio::time;
-use robstride::RobStrideUtils;
-use robstride::StopMode;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,11 +18,15 @@ async fn main() -> Result<()> {
 
     sock_tx.write_frame(rs_util.request_dev_id())?.await?;
     sock_tx.write_frame(rs_util.request_enable())?.await?;
-    sock_tx.write_frame(rs_util.request_motion(0.0, 1f32, 0f32, 0.2f32, 0.1f32))?.await?;
+    sock_tx
+        .write_frame(rs_util.request_motion(0.0, 1f32, 0f32, 0.2f32, 0.1f32))?
+        .await?;
     // sock_tx.write_frame(rs_util.request_stop(StopMode::Normal))?.await?;
 
-    tokio::spawn( async move {
-        sock_tx.write_frame(rs_util.request_param(0x302d)).expect("Error in reading param");
+    tokio::spawn(async move {
+        sock_tx
+            .write_frame(rs_util.request_param(0x302d))
+            .expect("Error in reading param");
         time::sleep(Duration::from_millis(1)).await;
     });
 
