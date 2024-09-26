@@ -24,7 +24,8 @@
 #define TTY_PORT "/dev/ttyCH341USB0"
 
 // Mac
-// Note that this baudrate isn't really supposed to work.
+// Note that this baudrate will let you send something to the device on Mac, but
+// it won't work because the device baudrate is supposed to be 921600.
 // #define BAUDRATE 115200
 // #define TTY_PORT "/dev/tty.usbserial-110"
 
