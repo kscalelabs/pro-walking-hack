@@ -10,3 +10,4 @@ Cargo.lock
 # Large files.
 *.onnx
 lib/
+can_usb/
