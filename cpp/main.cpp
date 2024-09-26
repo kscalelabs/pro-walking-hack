@@ -19,8 +19,14 @@
 #define CAN_ID_BROADCAST (0XFE) // Broadcast address - Default receive address
 #define CAN_ID_DEBUG_UI (0XFD)  // Debug address - Upper computer address
 
-// #define BAUDRATE 921600
-#define BAUDRATE 115200
+// Ubuntu
+#define BAUDRATE 921600
+#define TTY_PORT "/dev/ttyCH341USB0"
+
+// Mac
+// Note that this baudrate isn't really supposed to work.
+// #define BAUDRATE 115200
+// #define TTY_PORT "/dev/tty.usbserial-110"
 
 // Replace quint8 and quint32 with standard types
 typedef uint8_t uint8_t;
@@ -323,7 +329,7 @@ int main() {
   std::cout << "Starting program" << std::endl;
 
   // Initialize serial ports
-  my_serialport[0] = initSerialPort("/dev/tty.usbserial-110");
+  my_serialport[0] = initSerialPort(TTY_PORT);
   if (my_serialport[0] == -1) {
     std::cerr << "Failed to initialize serial port" << std::endl;
     return -1;
