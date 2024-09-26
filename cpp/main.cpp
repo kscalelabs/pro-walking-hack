@@ -29,11 +29,6 @@
 // #define BAUDRATE 115200
 // #define TTY_PORT "/dev/tty.usbserial-110"
 
-// Replace quint8 and quint32 with standard types
-typedef uint8_t uint8_t;
-typedef uint32_t uint32_t;
-
-// Add these enums
 enum canComMode {
   CANCOM_ANNOUNCE_DEVID = 0,
   CANCOM_MOTOR_CTRL,
@@ -76,9 +71,6 @@ struct motorStatus {
   bool noCaliFault;
   enum motorMode mode;
 };
-
-// E: 41 54 18 07 e8 0c 08 00 00 00 00 00 00 00 0d 0a
-// T: 41 54 18 07 e8 0c 08 00 00 00 00 00 00 00 00 0d 0a
 
 struct ExId {
   uint32_t id : 8;
@@ -179,8 +171,7 @@ int initSerialPort(const char *device) {
   struct termios options;
   tcgetattr(fd, &options);
 
-  // Configure serial port settings (baud rate, data bits, stop bits, parity,
-  // etc.)
+  // Configure serial port settings (baud rate, data bits, stop bits, parity, etc.)
   cfsetispeed(&options, BAUDRATE);
   cfsetospeed(&options, BAUDRATE);
 
