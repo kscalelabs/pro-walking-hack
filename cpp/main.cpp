@@ -19,15 +19,15 @@
 #define CAN_ID_BROADCAST (0XFE) // Broadcast address - Default receive address
 #define CAN_ID_DEBUG_UI (0XFD)  // Debug address - Upper computer address
 
-// Ubuntu
 #define BAUDRATE 921600
-#define TTY_PORT "/dev/ttyCH341USB0"
 
-// Mac
-// Note that this baudrate will let you send something to the device on Mac, but
-// it won't work because the device baudrate is supposed to be 921600.
-// #define BAUDRATE 115200
-// #define TTY_PORT "/dev/tty.usbserial-110"
+#if __APPLE__
+#define TTY_PORT "/dev/tty.wchusbserial110"
+#elif __linux__
+#define TTY_PORT "/dev/ttyCH341USB0"
+#else
+#error "Unsupported platform"
+#endif
 
 enum canComMode {
   CANCOM_ANNOUNCE_DEVID = 0,
@@ -171,7 +171,7 @@ int initSerialPort(const char *device) {
   struct termios options;
   tcgetattr(fd, &options);
 
-  // Configure serial port settings (baud rate, data bits, stop bits, parity, etc.)
+  // Configure port settings (baud rate, data bits, stop bits, parity, etc.)
   cfsetispeed(&options, BAUDRATE);
   cfsetospeed(&options, BAUDRATE);
 
