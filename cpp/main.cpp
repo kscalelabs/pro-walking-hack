@@ -403,11 +403,11 @@ int main() {
   send_set_location(0, 0x7016, 5, -0.7);
 
   // Left
-  send_set_location(0, 0x7017, 1, 3.14);
-  send_set_location(0, 0x7017, 2, 5.88);
-  send_set_location(0, 0x7017, 3, 1.57);
-  send_set_location(0, 0x7017, 4, 2.12);
-  send_set_location(0, 0x7017, 5, 0.7);
+  // send_set_location(0, 0x7017, 1, 3.14);
+  // send_set_location(0, 0x7017, 2, 5.88);
+  // send_set_location(0, 0x7017, 3, 1.57);
+  // send_set_location(0, 0x7017, 4, 2.12);
+  // send_set_location(0, 0x7017, 5, 0.7);
 
   // Close the serial port when done
   std::cout << "Closing serial port" << std::endl;
