@@ -94,9 +94,7 @@ std::vector<uint8_t> rxBuffer[MAX_PORTS];
 // Receive frame for each serial port
 CanPack rxFrame[MAX_PORTS];
 
-// Send data function
 void txdPack(uint8_t index, CanPack *pack) {
-  std::cout << "Sending data on port " << (int)index << std::endl;
   std::vector<uint8_t> Pack;
 
   if (pack->len < 1) {
@@ -149,8 +147,6 @@ void txdPack(uint8_t index, CanPack *pack) {
 
   // Clear the buffer
   tcflush(my_serialport[index], TCIFLUSH);
-
-  std::cout << "Data sent successfully" << std::endl;
 }
 
 int initSerialPort(const char *device) {
@@ -291,7 +287,23 @@ void readAndPrintResponse(uint8_t index) {
   }
 }
 
-void send_reset(uint8_t index, uint8_t id) {
+void send_set_mode(uint8_t tty_index, uint16_t index, uint8_t runmode,
+                   uint8_t id) {
+  CanPack pack;
+  memset(&pack, 0, sizeof(CanPack));
+  pack.exId.id = id;
+  pack.exId.data = CAN_ID_DEBUG_UI;
+  pack.exId.mode = CANCOM_SDO_WRITE;
+  pack.exId.res = 0;
+
+  memcpy(&pack.data[0], &index, 2);
+  memcpy(&pack.data[4], &runmode, 1);
+  pack.len = 8;
+
+  txdPack(tty_index, &pack);
+}
+
+void send_reset(uint8_t tty_index, uint16_t index, uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -300,11 +312,25 @@ void send_reset(uint8_t index, uint8_t id) {
   pack.exId.mode = CANCOM_MOTOR_RESET;
   pack.exId.res = 0;
 
-  txdPack(index, &pack);
+  txdPack(tty_index, &pack);
   // readAndPrintResponse(index);
 }
 
-void send_start(uint8_t index, uint8_t id) {
+void send_start(uint8_t tty_index, uint16_t index) {
+  CanPack pack;
+  memset(&pack, 0, sizeof(CanPack));
+  pack.len = 8;
+  pack.exId.id = index;
+  pack.exId.data = CAN_ID_DEBUG_UI;
+  pack.exId.mode = CANCOM_MOTOR_IN;
+  pack.exId.res = 0;
+
+  txdPack(tty_index, &pack);
+  // readAndPrintResponse(index);
+}
+
+void send_set_speed_limit(uint8_t tty_index, uint16_t index, uint8_t id,
+                          float speed) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -313,8 +339,26 @@ void send_start(uint8_t index, uint8_t id) {
   pack.exId.mode = CANCOM_MOTOR_IN;
   pack.exId.res = 0;
 
-  txdPack(index, &pack);
-  // readAndPrintResponse(index);
+  memcpy(&pack.data[0], &index, 2);
+  memcpy(&pack.data[4], &speed, 4);
+
+  txdPack(tty_index, &pack);
+}
+
+void send_set_location(uint8_t tty_index, uint16_t index, uint8_t id,
+                       float location) {
+  CanPack pack;
+  memset(&pack, 0, sizeof(CanPack));
+  pack.len = 8;
+  pack.exId.id = id;
+  pack.exId.data = CAN_ID_DEBUG_UI;
+  pack.exId.mode = CANCOM_MOTOR_IN;
+  pack.exId.res = 0;
+
+  memcpy(&pack.data[0], &index, 2);
+  memcpy(&pack.data[4], &location, 4);
+
+  txdPack(tty_index, &pack);
 }
 
 int main() {
@@ -327,13 +371,43 @@ int main() {
     return -1;
   }
 
-  // Add a delay after initializing the port
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
   // Initialize the device
-  uint8_t deviceId = 1; // Use the default motor address
-  send_start(0, deviceId);
-  // send_reset(0, deviceId);
+  for (uint8_t i = 1; i <= 5; i++) {
+    send_set_mode(0, 0x7005, i < 5 ? CANCOM_MOTOR_CALI : CANCOM_MOTOR_CTRL, i);
+  }
+  for (uint8_t i = 1; i <= 5; i++) {
+    send_start(0, i);
+  }
+  for (uint8_t i = 1; i <= 5; i++) {
+    send_set_speed_limit(0, 0x7017, i, 1.0);
+  }
+  // right
+  // 5    -0.7
+  // 4    4.12
+  // 3    4.71
+  // 2    0.4
+  // 1    3.14
+
+  // left
+  // 5    0.7
+  // 4    2.12
+  // 3    1.57
+  // 2    5.88
+  // 1    3.14
+
+  // Right
+  send_set_location(0, 0x7016, 1, 3.14);
+  send_set_location(0, 0x7016, 2, 0.4);
+  send_set_location(0, 0x7016, 3, 4.71);
+  send_set_location(0, 0x7016, 4, 4.12);
+  send_set_location(0, 0x7016, 5, -0.7);
+
+  // Left
+  send_set_location(0, 0x7017, 1, 3.14);
+  send_set_location(0, 0x7017, 2, 5.88);
+  send_set_location(0, 0x7017, 3, 1.57);
+  send_set_location(0, 0x7017, 4, 2.12);
+  send_set_location(0, 0x7017, 5, 0.7);
 
   // Close the serial port when done
   std::cout << "Closing serial port" << std::endl;
