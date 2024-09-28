@@ -356,6 +356,7 @@ int main() {
 
   // Initialize serial ports
   my_serialport = initSerialPort(TTY_PORT);
+  if (my_serialport == -1) return -1;
 
   bool do_init = true;
   
