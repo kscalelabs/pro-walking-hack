@@ -19,7 +19,8 @@
 #define BAUDRATE 921600
 
 #if __linux__
-#define TTY_PORT "/dev/ttyCH341USB0"
+// #define TTY_PORT "/dev/ttyCH341USB0"
+#define TTY_PORT "/dev/ttyUSB0"
 #elif __APPLE__
 #define TTY_PORT "/dev/tty.wchusbserial110"
 #else
@@ -117,6 +118,7 @@ void txdPack(CanPack *pack) {
   Pack[8 + pack->len] = '\n';
 
   // Print the full string of bits being sent
+  std::cout << "tx ";
   for (size_t i = 0; i < Pack.size(); ++i) {
     std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)Pack[i]
               << " ";
@@ -171,8 +173,9 @@ int initSerialPort(const char *device) {
       CREAD | CLOCAL; // Turn on READ & ignore ctrl lines (CLOCAL = 1)
 
   // Set raw input/output mode
-  options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // Raw input
-  options.c_oflag &= ~OPOST;                          // Raw output
+  options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+  options.c_iflag = 0;
+  options.c_oflag &= ~OPOST;
 
   // Set VMIN and VTIME
   options.c_cc[VMIN] = 0;
@@ -214,66 +217,16 @@ int initSerialPort(const char *device) {
 
 void read_bytes() {
   std::vector<uint8_t> response;
-  char buffer[1];
-  ssize_t bytes_read;
   bool startFound = false;
 
-  std::cout << "Waiting for response..." << std::endl;
+  char buffer[17];
+  ssize_t bytes_read = read(my_serialport, buffer, 17);
 
-  // Increase tmeout to 5 seconds
-  auto start = std::chrono::steady_clock::now();
-  while (std::chrono::steady_clock::now() - start < std::chrono::seconds(1)) {
-    bytes_read = read(my_serialport, buffer, 1);
-    if (bytes_read > 0) {
-      std::cout << "Read byte: 0x" << std::hex << std::setw(2)
-                << std::setfill('0') << (int)(unsigned char)buffer[0]
-                << std::dec << std::endl;
-      if (buffer[0] == 'A' && !startFound) {
-        startFound = true;
-        response.push_back(buffer[0]);
-      } else if (startFound) {
-        response.push_back(buffer[0]);
-        if (buffer[0] == '\n' && response.size() >= 2 &&
-            response[response.size() - 2] == '\r') {
-          std::cout << "Complete packet received" << std::endl;
-          break;
-        }
-      }
-    } else if (bytes_read == 0) {
-      std::cout << "No bytes available, waiting..." << std::endl;
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    } else {
-      std::cerr << "Error reading from serial port: " << strerror(errno)
-                << std::endl;
-      break;
-    }
+  std::cout << "rx ";
+  for (ssize_t i = 0; i < bytes_read; i++) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)buffer[i] << ' ' << std::dec;
   }
-
-  if (response.size() > 0) {
-    std::cout << "Response packet (hex): ";
-    for (size_t i = 0; i < response.size(); ++i) {
-      std::cout << std::setfill('0') << std::setw(2) << std::hex
-                << (int)response[i] << " ";
-    }
-    std::cout << std::dec << std::endl;
-
-    // Parse the response if it's a valid packet
-    if (response.size() >= 9 && response[0] == 'A' && response[1] == 'T') {
-      uint32_t addr = (response[2] << 24) | (response[3] << 16) |
-                      (response[4] << 8) | response[5];
-      uint8_t len = response[6];
-      std::cout << "Address: 0x" << std::hex << addr << std::dec << std::endl;
-      std::cout << "Length: " << (int)len << std::endl;
-      std::cout << "Data: ";
-      for (int i = 0; i < len && i < 8; ++i) {
-        std::cout << std::setfill('0') << std::setw(2) << std::hex
-                  << (int)response[7 + i] << " ";
-      }
-      std::cout << std::dec << std::endl;
-    }
-  } else {
-    std::cout << "No response received" << std::endl;
-  }
+  std::cout << std::endl;
 }
 
 void send_set_mode(uint16_t index, uint8_t runmode,
