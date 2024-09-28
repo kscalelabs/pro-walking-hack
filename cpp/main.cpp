@@ -23,7 +23,8 @@
 
 #if __linux__
 #define TTY_PORT "/dev/ttyCH341USB0"
-#define TTY_PORT_2 "/dev/ttyCH341USB1"
+#elif __APPLE__
+#define TTY_PORT "/dev/tty.wchusbserial110"
 #else
 #error "Unsupported platform"
 #endif
@@ -299,6 +300,7 @@ void send_set_mode(uint8_t tty_index, uint16_t index, uint8_t runmode,
   pack.len = 8;
 
   txdPack(tty_index, &pack);
+  // readAndPrintResponse(tty_index);
 }
 
 void send_reset(uint8_t tty_index, uint16_t index, uint8_t id) {
@@ -311,7 +313,7 @@ void send_reset(uint8_t tty_index, uint16_t index, uint8_t id) {
   pack.exId.res = 0;
 
   txdPack(tty_index, &pack);
-  // readAndPrintResponse(index);
+  // readAndPrintResponse(tty_index);
 }
 
 void send_start(uint8_t tty_index, uint16_t index) {
@@ -324,7 +326,7 @@ void send_start(uint8_t tty_index, uint16_t index) {
   pack.exId.res = 0;
 
   txdPack(tty_index, &pack);
-  // readAndPrintResponse(index);
+  // readAndPrintResponse(tty_index);
 }
 
 void send_set_speed_limit(uint8_t tty_index, uint16_t index, uint8_t id,
@@ -364,23 +366,23 @@ int main() {
 
   // Initialize serial ports
   my_serialport[0] = initSerialPort(TTY_PORT);
-  my_serialport[1] = initSerialPort(TTY_PORT_2);
 
   bool do_init = true;
 
   if (do_init) {
-    for (uint8_t j = 0; j <= 1; j++) {
-      for (uint8_t i = 1; i <= 5; i++) {
-        send_set_mode(j, 0x7005, i < 5 ? CANCOM_MOTOR_CALI : CANCOM_MOTOR_CTRL, i);
+    for (uint8_t j = 0; j <= 0; j++) {
+      for (uint8_t i = 1; i <= 1; i++) {
+        send_set_mode(j, 0x7005, i < 5 ? CANCOM_MOTOR_CALI : CANCOM_MOTOR_CTRL,
+                      i);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
       }
 
-      for (uint8_t i = 1; i <= 5; i++) {
+      for (uint8_t i = 1; i <= 1; i++) {
         send_start(j, i);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
       }
 
-      for (uint8_t i = 1; i <= 5; i++) {
+      for (uint8_t i = 1; i <= 1; i++) {
         send_set_speed_limit(j, 0x7017, i, 0.5);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
       }
@@ -405,28 +407,26 @@ int main() {
   float offset = 0.1;
   // auto delay = std::chrono::milliseconds(1);
   auto delay = std::chrono::microseconds(1);
-  for (int i = 0; i < 1000; i++) {
+  for (int i = 0; i < 1; i++) {
     offset = -offset;
 
-    send_set_location(1, 0x7016, 1, 3.14 + offset);
-    send_set_location(1, 0x7016, 2, 0.4 + offset);
-    send_set_location(1, 0x7016, 3, 4.71 + offset);
-    send_set_location(1, 0x7016, 4, 4.12 + offset);
-    send_set_location(1, 0x7016, 5, -0.7 + offset);
+    // send_set_location(1, 0x7016, 1, 3.14 + offset);
+    // send_set_location(1, 0x7016, 2, 0.4 + offset);
+    // send_set_location(1, 0x7016, 3, 4.71 + offset);
+    // send_set_location(1, 0x7016, 4, 4.12 + offset);
+    // send_set_location(1, 0x7016, 5, -0.7 + offset);
 
     send_set_location(0, 0x7016, 1, 3.14 + offset);
-    send_set_location(0, 0x7016, 2, 5.88 + offset);
-    send_set_location(0, 0x7016, 3, 1.57 + offset);
-    send_set_location(0, 0x7016, 4, 2.12 + offset);
-    send_set_location(0, 0x7016, 5, 0.7 + offset);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    // send_set_location(0, 0x7016, 2, 5.88 + offset);
+    // send_set_location(0, 0x7016, 3, 1.57 + offset);
+    // send_set_location(0, 0x7016, 4, 2.12 + offset);
+    // send_set_location(0, 0x7016, 5, 0.7 + offset);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
   // Close the serial port when done
   std::cout << "Closing serial port" << std::endl;
   close(my_serialport[0]);
-  close(my_serialport[1]);
 
   std::cout << "Program finished" << std::endl;
   return 0;
