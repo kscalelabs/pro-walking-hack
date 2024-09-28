@@ -454,6 +454,10 @@ MotorFeedback send_motor_control(uint8_t id, float posSet, float velSet,
 
   txdPack(&pack);
   return read_bytes();
+} 
+
+MotorFeedback send_position_control(uint8_t id, float posSet, float kpSet) {
+  return send_motor_control(id, posSet, 0, kpSet, 0, 0);
 }
 
 MotorFeedback send_torque_control(uint8_t id, float torqueSet) {
@@ -471,7 +475,7 @@ int main() {
   MotorFeedback feedback;
 
   // Set mode to calibration
-  feedback = send_set_mode(0x7005, CANCOM_MOTOR_CALI, 1);
+  feedback = send_set_mode(0x7005, 0, 1); // MIT mode
   if (feedback.isSet) {
     std::cout << "Set mode feedback received" << std::endl;
   }
@@ -491,56 +495,53 @@ int main() {
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
+  send_position_control(1, 0.0, 10.0);
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
   // Sine wave torque control loop
   const double pi = 3.14159265358979323846;
   const double magnitude = pi / 4;
-  const double period = 2.5;
-  const double duration = 10.0;
-  const double kp = 1.0;
+  const double period = 2.0;
+  const double duration = 0.0;
+  const double kp = 5.0;
 
   auto start_time = std::chrono::steady_clock::now();
   double elapsed_time = 0.0;
   int instruction_count = 0;
-  auto last_second = start_time;
+
+  double desired_torque = 0.0;
 
   while (elapsed_time < duration) {
-    double desired_position =
-        magnitude * std::sin(2 * pi * elapsed_time / period);
-    double current_position = feedback.position;
-    double position_error = desired_position - current_position;
-    double desired_torque = kp * position_error;
-
-    // Send torque control command
-    feedback = send_torque_control(1, desired_torque);
-    instruction_count++;
-
     if (feedback.isSet) {
+      double desired_position =
+          magnitude * std::sin(2 * pi * elapsed_time / period);
+      double current_position = feedback.position;
+      double position_error = desired_position - current_position;
+      desired_torque = kp * position_error;
+ 
       std::cout << "Time: " << std::fixed << std::setprecision(2)
                 << elapsed_time << "s, "
                 << "Desired pos: " << std::setprecision(3) << desired_position
                 << ", "
                 << "Current pos: " << std::setprecision(3) << current_position
                 << ", "
-                << "Torque: " << std::setprecision(3) << desired_torque
+                << "Desired torque: " << std::setprecision(3) << desired_torque
                 << std::endl;
     }
 
-    // Sleep for a short interval (e.g., 20 ms) to avoid overwhelming the motor
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    // Send torque control command
+    feedback = send_torque_control(1, desired_torque);
+    instruction_count++;
+
+    // Sleep for a short interval to avoid overwhelming the motor
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     // Update elapsed time
     auto current_time = std::chrono::steady_clock::now();
     elapsed_time =
         std::chrono::duration<double>(current_time - start_time).count();
-
-    // Calculate and display instructions per second
-    if (std::chrono::duration_cast<std::chrono::seconds>(current_time -
-                                                         last_second)
-            .count() >= 1) {
-      std::cout << "Instructions per second: " << instruction_count
-                << std::endl;
-      instruction_count = 0;
-      last_second = current_time;
+    if (elapsed_time > 0) {
+        std::cout << "Instructions per second: " << (float)instruction_count / elapsed_time << std::endl;
     }
   }
 
