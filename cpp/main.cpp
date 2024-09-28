@@ -215,18 +215,86 @@ int initSerialPort(const char *device) {
   return fd;
 }
 
+// Define these constants based on your system's specifications
+#define P_MIN -6.28318530718
+#define P_MAX 6.28318530718
+#define V_MIN -30.0
+#define V_MAX 30.0
+#define T_MIN -12.0
+#define T_MAX 12.0
+
+float uint_to_float(int x_int, float x_min, float x_max, int bits) {
+    float span = x_max - x_min;
+    float offset = x_min;
+    return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
+}
+
 void read_bytes() {
-  std::vector<uint8_t> response;
-  bool startFound = false;
+    std::vector<uint8_t> response;
+    char buffer[17];
+    ssize_t bytes_read = read(my_serialport, buffer, 17);
 
-  char buffer[17];
-  ssize_t bytes_read = read(my_serialport, buffer, 17);
+    std::cout << "rx ";
+    for (ssize_t i = 0; i < bytes_read; i++) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)buffer[i] << ' ' << std::dec;
+    }
+    std::cout << std::endl;
 
-  std::cout << "rx ";
-  for (ssize_t i = 0; i < bytes_read; i++) {
-    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)buffer[i] << ' ' << std::dec;
-  }
-  std::cout << std::endl;
+    if (bytes_read == 17 && buffer[0] == 'A' && buffer[1] == 'T') {
+        CanPack rxFrame;
+        uint32_t addr = ((uint32_t)buffer[2] << 24) | ((uint32_t)buffer[3] << 16) | ((uint32_t)buffer[4] << 8) | buffer[5];
+        addr = addr >> 3;
+
+        memcpy(&(rxFrame.exId), &addr, 4);
+        rxFrame.len = buffer[6];
+
+        for (uint8_t i = 0; i < rxFrame.len; i++) {
+            rxFrame.data[i] = buffer[7 + i];
+        }
+
+        // Parse the data
+        struct motorStatus mtStatus;
+        uint8_t canIdGet;
+        uint16_t posIntGet, velIntGet, torqueIntGet;
+        float posGet, velGet, torqueGet;
+
+        canIdGet = rxFrame.exId.data & 0x00FF;
+
+        mtStatus.underVoltFault = (rxFrame.exId.data & 0x0100) ? true : false;
+        mtStatus.overCurFault = (rxFrame.exId.data & 0x0200) ? true : false;
+        mtStatus.overTempFault = (rxFrame.exId.data & 0x0400) ? true : false;
+        mtStatus.encoderFault = (rxFrame.exId.data & 0x0800) ? true : false;
+        mtStatus.hallFault = (rxFrame.exId.data & 0x1000) ? true : false;
+        mtStatus.noCaliFault = (rxFrame.exId.data & 0x2000) ? true : false;
+
+        mtStatus.mode = (enum motorMode)((rxFrame.exId.data & 0xC000) >> 14);
+
+        posIntGet = ((int)rxFrame.data[0] << 8) | rxFrame.data[1];
+        velIntGet = ((int)rxFrame.data[2] << 8) | rxFrame.data[3];
+        torqueIntGet = ((int)rxFrame.data[4] << 8) | rxFrame.data[5];
+
+        posGet = uint_to_float(posIntGet, P_MIN, P_MAX, 16);
+        velGet = uint_to_float(velIntGet, V_MIN, V_MAX, 16);
+        torqueGet = uint_to_float(torqueIntGet, T_MIN, T_MAX, 16);
+
+        // Print parsed data
+        std::cout << "Parsed data:" << std::endl;
+        std::cout << "  Motor ID: " << (int)canIdGet << std::endl;
+        std::cout << "  Position: " << posGet << std::endl;
+        std::cout << "  Velocity: " << velGet << std::endl;
+        std::cout << "  Torque: " << torqueGet << std::endl;
+        std::cout << "  Mode: " << mtStatus.mode << std::endl;
+        std::cout << "  Faults: "
+                  << (mtStatus.underVoltFault ? "UnderVolt " : "")
+                  << (mtStatus.overCurFault ? "OverCurrent " : "")
+                  << (mtStatus.overTempFault ? "OverTemp " : "")
+                  << (mtStatus.encoderFault ? "Encoder " : "")
+                  << (mtStatus.hallFault ? "Hall " : "")
+                  << (mtStatus.noCaliFault ? "NoCali" : "")
+                  << std::endl;
+    } else {
+        std::cout << "Received data does not match expected format" << std::endl;
+    }
 }
 
 void send_set_mode(uint16_t index, uint8_t runmode,
@@ -243,7 +311,7 @@ void send_set_mode(uint16_t index, uint8_t runmode,
   pack.len = 8;
 
   txdPack(&pack);
-  // readAndPrintResponse();
+  read_bytes();
 }
 
 void send_reset(uint16_t index, uint8_t id) {
@@ -256,7 +324,7 @@ void send_reset(uint16_t index, uint8_t id) {
   pack.exId.res = 0;
 
   txdPack(&pack);
-  // readAndPrintResponse();
+  read_bytes();
 }
 
 void send_start(uint16_t index) {
@@ -269,7 +337,7 @@ void send_start(uint16_t index) {
   pack.exId.res = 0;
 
   txdPack(&pack);
-  // readAndPrintResponse();
+  read_bytes();
 }
 
 void send_set_speed_limit(uint16_t index, uint8_t id,
@@ -286,6 +354,7 @@ void send_set_speed_limit(uint16_t index, uint8_t id,
   memcpy(&pack.data[4], &speed, 4);
 
   txdPack(&pack);
+  read_bytes();
 }
 
 void send_set_location(uint16_t index, uint8_t id,
@@ -302,6 +371,7 @@ void send_set_location(uint16_t index, uint8_t id,
   memcpy(&pack.data[4], &location, 4);
 
   txdPack(&pack);
+  read_bytes();
 }
 
 int main() {
@@ -312,31 +382,16 @@ int main() {
   if (my_serialport == -1) return -1;
 
   bool do_init = true;
-  
+
   send_set_mode(0x7005, CANCOM_MOTOR_CALI, 1);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  
+
   send_start(1);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
   send_set_speed_limit(0x7017, 1, 0.5);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  // right
-  // 5    -0.7
-  // 4    4.12
-  // 3    4.71
-  // 2    0.4
-  // 1    3.14
-
-  // left
-  // 5    0.7
-  // 4    2.12
-  // 3    1.57
-  // 2    5.88
-  // 1    3.14
-
-  // Right
   float offset = 0.1;
   for (int i = 0; i < 5; i++) {
     offset = -offset;
