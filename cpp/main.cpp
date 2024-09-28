@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
@@ -25,6 +26,53 @@
 #define TTY_PORT "/dev/tty.wchusbserial110"
 #else
 #error "Unsupported platform"
+#endif
+
+#define MOTOR_TYPE 3
+
+#if MOTOR_TYPE == 1
+
+#define P_MIN -12.5f
+#define P_MAX 12.5f
+#define V_MIN -44.0f
+#define V_MAX 44.0f
+#define KP_MIN 0.0f
+#define KP_MAX 500.0f
+#define KD_MIN 0.0f
+#define KD_MAX 5.0f
+#define T_MIN -12.0f
+#define T_MAX 12.0f
+
+#elif MOTOR_TYPE == 3
+
+#define P_MIN -12.5f
+#define P_MAX 12.5f
+#define V_MIN -20.0f
+#define V_MAX 20.0f
+#define KP_MIN 0.0f
+#define KP_MAX 5000.0f
+#define KD_MIN 0.0f
+#define KD_MAX 100.0f
+#define T_MIN -60.0f
+#define T_MAX 60.0f
+
+#elif MOTOR_TYPE == 4
+
+#define P_MIN -12.5f
+#define P_MAX 12.5f
+#define V_MIN -15.0f
+#define V_MAX 15.0f
+#define KP_MIN 0.0f
+#define KP_MAX 5000.0f
+#define KD_MIN 0.0f
+#define KD_MAX 100.0f
+#define T_MIN -120.0f
+#define T_MAX 120.0f
+
+#else
+
+#error "Unsupported motor type"
+
 #endif
 
 enum canComMode {
@@ -215,95 +263,89 @@ int initSerialPort(const char *device) {
   return fd;
 }
 
-// Define these constants based on your system's specifications
-#define P_MIN -6.28318530718
-#define P_MAX 6.28318530718
-#define V_MIN -30.0
-#define V_MAX 30.0
-#define T_MIN -12.0
-#define T_MAX 12.0
-
 float uint_to_float(int x_int, float x_min, float x_max, int bits) {
-    float span = x_max - x_min;
-    float offset = x_min;
-    return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
+  float span = x_max - x_min;
+  float offset = x_min;
+  return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
 }
 
-void read_bytes() {
-    std::vector<uint8_t> response;
-    char buffer[17];
-    ssize_t bytes_read = read(my_serialport, buffer, 17);
-    if (bytes_read == 0) {
-        std::cout << "No bytes read" << std::endl;
-        return;
+struct MotorFeedback {
+  uint32_t canId;
+  float position;
+  float velocity;
+  float torque;
+  motorMode mode;
+  uint16_t faults;
+  bool isSet;
+};
+
+MotorFeedback read_bytes() {
+  MotorFeedback feedback = {0, 0.0f, 0.0f, 0.0f, MT_MODE_RESET,
+                            0, false}; // Initialize isSet to false
+  std::vector<uint8_t> response;
+  char buffer[17];
+  ssize_t bytes_read = read(my_serialport, buffer, 17);
+  if (bytes_read == 0) {
+    std::cout << "No bytes read" << std::endl;
+    return feedback;
+  }
+
+  std::cout << "rx ";
+  for (ssize_t i = 0; i < bytes_read; i++) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0')
+              << (int)(unsigned char)buffer[i] << ' ' << std::dec;
+  }
+  std::cout << std::endl;
+
+  if (bytes_read == 17 && buffer[0] == 'A' && buffer[1] == 'T') {
+    CanPack rxFrame;
+
+    uint32_t addr = buffer[5] & 0x000000FF;
+    addr |= (buffer[4] << 8) & 0x0000FF00;
+    addr |= (buffer[3] << 16) & 0x00FF0000;
+    addr |= (buffer[2] << 24) & 0xFF000000;
+    addr = addr >> 3;
+    memcpy(&(rxFrame.exId), &addr, 4);
+
+    rxFrame.len = buffer[6];
+    for (uint8_t i = 0; i < rxFrame.len; i++) {
+      rxFrame.data[i] = buffer[7 + i];
     }
 
-    std::cout << "rx ";
-    for (ssize_t i = 0; i < bytes_read; i++) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)buffer[i] << ' ' << std::dec;
-    }
-    std::cout << std::endl;
+    // Parse the data
+    feedback.canId = rxFrame.exId.data & 0x00FF;
+    feedback.faults = (rxFrame.exId.data & 0x3F00) >> 8;
+    feedback.mode = (enum motorMode)((rxFrame.exId.data & 0xC000) >> 14);
 
-    if (bytes_read == 17 && buffer[0] == 'A' && buffer[1] == 'T') {
-        CanPack rxFrame;
+    uint16_t posIntGet = ((int)rxFrame.data[0] << 8) | rxFrame.data[1];
+    uint16_t velIntGet = ((int)rxFrame.data[2] << 8) | rxFrame.data[3];
+    uint16_t torqueIntGet = ((int)rxFrame.data[4] << 8) | rxFrame.data[5];
 
-	uint32_t addr = buffer[5] & 0x000000FF;
-	addr |= (buffer[4] << 8) & 0x0000FF00;
-	addr |= (buffer[3] << 16) & 0x00FF0000;
-	addr |= (buffer[2] << 24) & 0xFF000000;
-        addr = addr >> 3;
-        memcpy(&(rxFrame.exId), &addr, 4);
+    feedback.position = uint_to_float(posIntGet, P_MIN, P_MAX, 16);
+    feedback.velocity = uint_to_float(velIntGet, V_MIN, V_MAX, 16);
+    feedback.torque = uint_to_float(torqueIntGet, T_MIN, T_MAX, 16);
 
-        rxFrame.len = buffer[6];
-        for (uint8_t i = 0; i < rxFrame.len; i++) {
-            rxFrame.data[i] = buffer[7 + i];
-        }
+    feedback.isSet = true;
 
-        // Parse the data.
-        struct motorStatus mtStatus;
-        uint32_t canIdGet;
-        uint16_t posIntGet, velIntGet, torqueIntGet;
-        float posGet, velGet, torqueGet;
+    // Print parsed data
+    std::cout << "Parsed data:" << std::endl;
+    std::cout << "  Motor ID: " << feedback.canId << std::endl;
+    std::cout << "  Position: " << feedback.position << std::endl;
+    std::cout << "  Velocity: " << feedback.velocity << std::endl;
+    std::cout << "  Torque: " << feedback.torque << std::endl;
+    std::cout << "  Mode: " << feedback.mode << std::endl;
+    std::cout << "  Faults: " << (feedback.faults & 0x01 ? "UnderVolt " : "")
+              << (feedback.faults & 0x02 ? "OverCurrent " : "")
+              << (feedback.faults & 0x04 ? "OverTemp " : "")
+              << (feedback.faults & 0x08 ? "Encoder " : "")
+              << (feedback.faults & 0x10 ? "Hall " : "")
+              << (feedback.faults & 0x20 ? "NoCali" : "") << std::endl;
+  }
 
-        canIdGet = rxFrame.exId.data & 0x00FF;
-
-        mtStatus.underVoltFault = (rxFrame.exId.data & 0x0100) ? true : false;
-        mtStatus.overCurFault = (rxFrame.exId.data & 0x0200) ? true : false;
-        mtStatus.overTempFault = (rxFrame.exId.data & 0x0400) ? true : false;
-        mtStatus.encoderFault = (rxFrame.exId.data & 0x0800) ? true : false;
-        mtStatus.hallFault = (rxFrame.exId.data & 0x1000) ? true : false;
-        mtStatus.noCaliFault = (rxFrame.exId.data & 0x2000) ? true : false;
-
-        mtStatus.mode = (enum motorMode)((rxFrame.exId.data & 0xC000) >> 14);
-
-        posIntGet = ((int)rxFrame.data[0] << 8) | rxFrame.data[1];
-        velIntGet = ((int)rxFrame.data[2] << 8) | rxFrame.data[3];
-        torqueIntGet = ((int)rxFrame.data[4] << 8) | rxFrame.data[5];
-
-        posGet = uint_to_float(posIntGet, P_MIN, P_MAX, 16);
-        velGet = uint_to_float(velIntGet, V_MIN, V_MAX, 16);
-        torqueGet = uint_to_float(torqueIntGet, T_MIN, T_MAX, 16);
-
-        // Print parsed data
-        std::cout << "Parsed data:" << std::endl;
-        std::cout << "  Motor ID: " << canIdGet << std::endl;
-        std::cout << "  Position: " << posGet << std::endl;
-        std::cout << "  Velocity: " << velGet << std::endl;
-        std::cout << "  Torque: " << torqueGet << std::endl;
-        std::cout << "  Mode: " << mtStatus.mode << std::endl;
-        std::cout << "  Faults: "
-                  << (mtStatus.underVoltFault ? "UnderVolt " : "")
-                  << (mtStatus.overCurFault ? "OverCurrent " : "")
-                  << (mtStatus.overTempFault ? "OverTemp " : "")
-                  << (mtStatus.encoderFault ? "Encoder " : "")
-                  << (mtStatus.hallFault ? "Hall " : "")
-                  << (mtStatus.noCaliFault ? "NoCali" : "")
-                  << std::endl;
-    }
+  return feedback;
 }
 
-void send_set_mode(uint16_t index, uint8_t runmode,
-                   uint8_t id) {
+MotorFeedback send_set_mode(uint16_t index, uint8_t runmode, uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.exId.id = id;
@@ -316,10 +358,10 @@ void send_set_mode(uint16_t index, uint8_t runmode,
   pack.len = 8;
 
   txdPack(&pack);
-  read_bytes();
+  return read_bytes();
 }
 
-void send_reset(uint16_t index, uint8_t id) {
+MotorFeedback send_reset(uint16_t index, uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -329,10 +371,10 @@ void send_reset(uint16_t index, uint8_t id) {
   pack.exId.res = 0;
 
   txdPack(&pack);
-  read_bytes();
+  return read_bytes();
 }
 
-void send_start(uint16_t index) {
+MotorFeedback send_start(uint16_t index) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -342,11 +384,10 @@ void send_start(uint16_t index) {
   pack.exId.res = 0;
 
   txdPack(&pack);
-  read_bytes();
+  return read_bytes();
 }
 
-void send_set_speed_limit(uint16_t index, uint8_t id,
-                          float speed) {
+MotorFeedback send_set_speed_limit(uint16_t index, uint8_t id, float speed) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -359,11 +400,10 @@ void send_set_speed_limit(uint16_t index, uint8_t id,
   memcpy(&pack.data[4], &speed, 4);
 
   txdPack(&pack);
-  read_bytes();
+  return read_bytes();
 }
 
-void send_set_location(uint16_t index, uint8_t id,
-                       float location) {
+MotorFeedback send_set_location(uint16_t index, uint8_t id, float location) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -376,7 +416,48 @@ void send_set_location(uint16_t index, uint8_t id,
   memcpy(&pack.data[4], &location, 4);
 
   txdPack(&pack);
-  read_bytes();
+  return read_bytes();
+}
+
+// Add this function to convert float to uint
+uint16_t float_to_uint(float x, float x_min, float x_max, int bits) {
+  float span = x_max - x_min;
+  float offset = x_min;
+  return (uint16_t)((x - offset) * ((float)((1 << bits) - 1)) / span);
+}
+
+MotorFeedback send_motor_control(uint8_t id, float posSet, float velSet,
+                                 float kpSet, float kdSet, float torqueSet) {
+  CanPack pack;
+  memset(&pack, 0, sizeof(CanPack));
+  pack.exId.id = id;
+  pack.len = 8;
+  pack.exId.mode = CANCOM_MOTOR_CTRL;
+  pack.exId.res = 0;
+
+  uint16_t posIntSet = float_to_uint(posSet, P_MIN, P_MAX, 16);
+  uint16_t velIntSet = float_to_uint(velSet, V_MIN, V_MAX, 16);
+  uint16_t kpIntSet = float_to_uint(kpSet, KP_MIN, KP_MAX, 16);
+  uint16_t kdIntSet = float_to_uint(kdSet, KD_MIN, KD_MAX, 16);
+  uint16_t torqueIntSet = float_to_uint(torqueSet, T_MIN, T_MAX, 16);
+
+  pack.exId.data = torqueIntSet;
+
+  pack.data[0] = posIntSet >> 8;
+  pack.data[1] = posIntSet & 0xFF;
+  pack.data[2] = velIntSet >> 8;
+  pack.data[3] = velIntSet & 0xFF;
+  pack.data[4] = kpIntSet >> 8;
+  pack.data[5] = kpIntSet & 0xFF;
+  pack.data[6] = kdIntSet >> 8;
+  pack.data[7] = kdIntSet & 0xFF;
+
+  txdPack(&pack);
+  return read_bytes();
+}
+
+MotorFeedback send_torque_control(uint8_t id, float torqueSet) {
+  return send_motor_control(id, 0, 0, 0, 0, torqueSet);
 }
 
 int main() {
@@ -384,24 +465,89 @@ int main() {
 
   // Initialize serial ports
   my_serialport = initSerialPort(TTY_PORT);
-  if (my_serialport == -1) return -1;
+  if (my_serialport == -1)
+    return -1;
 
-  bool do_init = true;
+  MotorFeedback feedback;
 
-  send_set_mode(0x7005, CANCOM_MOTOR_CALI, 1);
+  // Set mode to calibration
+  feedback = send_set_mode(0x7005, CANCOM_MOTOR_CALI, 1);
+  if (feedback.isSet) {
+    std::cout << "Set mode feedback received" << std::endl;
+  }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  send_start(1);
+  // Start the motor
+  feedback = send_start(1);
+  if (feedback.isSet) {
+    std::cout << "Start feedback received" << std::endl;
+  }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  send_set_speed_limit(0x7017, 1, 2);
+  // Set speed limit
+  feedback = send_set_speed_limit(0x7017, 1, 2);
+  if (feedback.isSet) {
+    std::cout << "Set speed limit feedback received" << std::endl;
+  }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  float offset = 0.1;
-  for (int i = 0; i < 5; i++) {
-    offset = -offset;
-    send_set_location(0x7016, 1, 3.14 + offset);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  // Sine wave torque control loop
+  const double pi = 3.14159265358979323846;
+  const double magnitude = pi / 4;
+  const double period = 2.5;
+  const double duration = 10.0;
+  const double kp = 1.0;
+
+  auto start_time = std::chrono::steady_clock::now();
+  double elapsed_time = 0.0;
+  int instruction_count = 0;
+  auto last_second = start_time;
+
+  while (elapsed_time < duration) {
+    double desired_position =
+        magnitude * std::sin(2 * pi * elapsed_time / period);
+    double current_position = feedback.position;
+    double position_error = desired_position - current_position;
+    double desired_torque = kp * position_error;
+
+    // Send torque control command
+    feedback = send_torque_control(1, desired_torque);
+    instruction_count++;
+
+    if (feedback.isSet) {
+      std::cout << "Time: " << std::fixed << std::setprecision(2)
+                << elapsed_time << "s, "
+                << "Desired pos: " << std::setprecision(3) << desired_position
+                << ", "
+                << "Current pos: " << std::setprecision(3) << current_position
+                << ", "
+                << "Torque: " << std::setprecision(3) << desired_torque
+                << std::endl;
+    }
+
+    // Sleep for a short interval (e.g., 20 ms) to avoid overwhelming the motor
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Update elapsed time
+    auto current_time = std::chrono::steady_clock::now();
+    elapsed_time =
+        std::chrono::duration<double>(current_time - start_time).count();
+
+    // Calculate and display instructions per second
+    if (std::chrono::duration_cast<std::chrono::seconds>(current_time -
+                                                         last_second)
+            .count() >= 1) {
+      std::cout << "Instructions per second: " << instruction_count
+                << std::endl;
+      instruction_count = 0;
+      last_second = current_time;
+    }
+  }
+
+  // Reset the motor after the loop
+  feedback = send_reset(0, 1);
+  if (feedback.isSet) {
+    std::cout << "Reset feedback received" << std::endl;
   }
 
   // Close the serial port when done
