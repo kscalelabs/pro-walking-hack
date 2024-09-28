@@ -11,9 +11,6 @@
 #include <unistd.h>
 #include <vector>
 
-// Define the maximum number of serial ports
-#define MAX_PORTS 10
-
 #define CAN_ID_MASTER (0X00)        // Control host address - SPIE
 #define CAN_ID_MOTOR_DEFAULT (0X7F) // Default motor address - Unconfigured ID
 #define CAN_ID_BROADCAST (0XFE) // Broadcast address - Default receive address
@@ -85,16 +82,9 @@ struct CanPack {
   uint8_t data[8];
 };
 
-// Serial port handles
-int my_serialport[MAX_PORTS];
+int my_serialport;
 
-// Receive buffer for each serial port
-std::vector<uint8_t> rxBuffer[MAX_PORTS];
-
-// Receive frame for each serial port
-CanPack rxFrame[MAX_PORTS];
-
-void txdPack(uint8_t index, CanPack *pack) {
+void txdPack(CanPack *pack) {
   std::vector<uint8_t> Pack;
 
   if (pack->len < 1) {
@@ -135,7 +125,7 @@ void txdPack(uint8_t index, CanPack *pack) {
 
   // Write the data
   ssize_t bytes_written =
-      write(my_serialport[index], Pack.data(), (uint16_t)Pack.size());
+      write(my_serialport, Pack.data(), (uint16_t)Pack.size());
   if (bytes_written < 0) {
     std::cerr << "Error writing to serial port: " << strerror(errno)
               << std::endl;
@@ -145,7 +135,7 @@ void txdPack(uint8_t index, CanPack *pack) {
   }
 
   // Clear the buffer
-  tcflush(my_serialport[index], TCIFLUSH);
+  tcflush(my_serialport, TCIFLUSH);
 }
 
 int initSerialPort(const char *device) {
@@ -222,7 +212,7 @@ int initSerialPort(const char *device) {
   return fd;
 }
 
-void readAndPrintResponse(uint8_t index) {
+void read_bytes() {
   std::vector<uint8_t> response;
   char buffer[1];
   ssize_t bytes_read;
@@ -230,10 +220,10 @@ void readAndPrintResponse(uint8_t index) {
 
   std::cout << "Waiting for response..." << std::endl;
 
-  // Increase timeout to 5 seconds
+  // Increase tmeout to 5 seconds
   auto start = std::chrono::steady_clock::now();
   while (std::chrono::steady_clock::now() - start < std::chrono::seconds(1)) {
-    bytes_read = read(my_serialport[index], buffer, 1);
+    bytes_read = read(my_serialport, buffer, 1);
     if (bytes_read > 0) {
       std::cout << "Read byte: 0x" << std::hex << std::setw(2)
                 << std::setfill('0') << (int)(unsigned char)buffer[0]
@@ -286,7 +276,7 @@ void readAndPrintResponse(uint8_t index) {
   }
 }
 
-void send_set_mode(uint8_t tty_index, uint16_t index, uint8_t runmode,
+void send_set_mode(uint16_t index, uint8_t runmode,
                    uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
@@ -299,11 +289,11 @@ void send_set_mode(uint8_t tty_index, uint16_t index, uint8_t runmode,
   memcpy(&pack.data[4], &runmode, 1);
   pack.len = 8;
 
-  txdPack(tty_index, &pack);
-  // readAndPrintResponse(tty_index);
+  txdPack(&pack);
+  // readAndPrintResponse();
 }
 
-void send_reset(uint8_t tty_index, uint16_t index, uint8_t id) {
+void send_reset(uint16_t index, uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -312,11 +302,11 @@ void send_reset(uint8_t tty_index, uint16_t index, uint8_t id) {
   pack.exId.mode = CANCOM_MOTOR_RESET;
   pack.exId.res = 0;
 
-  txdPack(tty_index, &pack);
-  // readAndPrintResponse(tty_index);
+  txdPack(&pack);
+  // readAndPrintResponse();
 }
 
-void send_start(uint8_t tty_index, uint16_t index) {
+void send_start(uint16_t index) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -325,11 +315,11 @@ void send_start(uint8_t tty_index, uint16_t index) {
   pack.exId.mode = CANCOM_MOTOR_IN;
   pack.exId.res = 0;
 
-  txdPack(tty_index, &pack);
-  // readAndPrintResponse(tty_index);
+  txdPack(&pack);
+  // readAndPrintResponse();
 }
 
-void send_set_speed_limit(uint8_t tty_index, uint16_t index, uint8_t id,
+void send_set_speed_limit(uint16_t index, uint8_t id,
                           float speed) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
@@ -342,10 +332,10 @@ void send_set_speed_limit(uint8_t tty_index, uint16_t index, uint8_t id,
   memcpy(&pack.data[0], &index, 2);
   memcpy(&pack.data[4], &speed, 4);
 
-  txdPack(tty_index, &pack);
+  txdPack(&pack);
 }
 
-void send_set_location(uint8_t tty_index, uint16_t index, uint8_t id,
+void send_set_location(uint16_t index, uint8_t id,
                        float location) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
@@ -358,36 +348,26 @@ void send_set_location(uint8_t tty_index, uint16_t index, uint8_t id,
   memcpy(&pack.data[0], &index, 2);
   memcpy(&pack.data[4], &location, 4);
 
-  txdPack(tty_index, &pack);
+  txdPack(&pack);
 }
 
 int main() {
   std::cout << "Starting program" << std::endl;
 
   // Initialize serial ports
-  my_serialport[0] = initSerialPort(TTY_PORT);
+  my_serialport = initSerialPort(TTY_PORT);
+  if (my_serialport == -1) return -1;
 
   bool do_init = true;
+  
+  send_set_mode(0x7005, CANCOM_MOTOR_CALI, 1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  
+  send_start(1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  if (do_init) {
-    for (uint8_t j = 0; j <= 0; j++) {
-      for (uint8_t i = 1; i <= 1; i++) {
-        send_set_mode(j, 0x7005, i < 5 ? CANCOM_MOTOR_CALI : CANCOM_MOTOR_CTRL,
-                      i);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      }
-
-      for (uint8_t i = 1; i <= 1; i++) {
-        send_start(j, i);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      }
-
-      for (uint8_t i = 1; i <= 1; i++) {
-        send_set_speed_limit(j, 0x7017, i, 0.5);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      }
-    }
-  }
+  send_set_speed_limit(0x7017, 1, 0.5);
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
   // right
   // 5    -0.7
@@ -405,28 +385,16 @@ int main() {
 
   // Right
   float offset = 0.1;
-  // auto delay = std::chrono::milliseconds(1);
-  auto delay = std::chrono::microseconds(1);
-  for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < 5; i++) {
     offset = -offset;
-
-    // send_set_location(1, 0x7016, 1, 3.14 + offset);
-    // send_set_location(1, 0x7016, 2, 0.4 + offset);
-    // send_set_location(1, 0x7016, 3, 4.71 + offset);
-    // send_set_location(1, 0x7016, 4, 4.12 + offset);
-    // send_set_location(1, 0x7016, 5, -0.7 + offset);
-
-    send_set_location(0, 0x7016, 1, 3.14 + offset);
-    // send_set_location(0, 0x7016, 2, 5.88 + offset);
-    // send_set_location(0, 0x7016, 3, 1.57 + offset);
-    // send_set_location(0, 0x7016, 4, 2.12 + offset);
-    // send_set_location(0, 0x7016, 5, 0.7 + offset);
-    // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    send_set_location(0x7016, 1, 3.14 + offset);
+    read_bytes();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
   // Close the serial port when done
   std::cout << "Closing serial port" << std::endl;
-  close(my_serialport[0]);
+  close(my_serialport);
 
   std::cout << "Program finished" << std::endl;
   return 0;
