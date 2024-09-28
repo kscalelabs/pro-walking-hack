@@ -10,3 +10,6 @@ Cargo.lock
 # Large files.
 lib/
 can_usb/
+
+# Other files
+.venv/
