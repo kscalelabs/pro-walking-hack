@@ -118,6 +118,15 @@ struct motorStatus {
   enum motorMode mode;
 };
 
+enum runMode {
+  MIT_MODE = 0,
+  POSITION_MODE,
+  SPEED_MODE,
+  CURRENT_MODE,
+  TO_ZERO_MODE,
+  CSP_POSITION_MODE,
+};
+
 struct ExId {
   uint32_t id : 8;
   uint32_t data : 16;
@@ -345,7 +354,7 @@ MotorFeedback read_bytes() {
   return feedback;
 }
 
-MotorFeedback send_set_mode(uint16_t index, uint8_t runmode, uint8_t id) {
+MotorFeedback send_set_mode(runMode runmode, uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.exId.id = id;
@@ -353,6 +362,7 @@ MotorFeedback send_set_mode(uint16_t index, uint8_t runmode, uint8_t id) {
   pack.exId.mode = CANCOM_SDO_WRITE;
   pack.exId.res = 0;
 
+  uint16_t index = 0x7005;
   memcpy(&pack.data[0], &index, 2);
   memcpy(&pack.data[4], &runmode, 1);
   pack.len = 8;
@@ -361,7 +371,7 @@ MotorFeedback send_set_mode(uint16_t index, uint8_t runmode, uint8_t id) {
   return read_bytes();
 }
 
-MotorFeedback send_reset(uint16_t index, uint8_t id) {
+MotorFeedback send_reset(uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -374,11 +384,11 @@ MotorFeedback send_reset(uint16_t index, uint8_t id) {
   return read_bytes();
 }
 
-MotorFeedback send_start(uint16_t index) {
+MotorFeedback send_start(uint8_t id) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
-  pack.exId.id = index;
+  pack.exId.id = id;
   pack.exId.data = CAN_ID_DEBUG_UI;
   pack.exId.mode = CANCOM_MOTOR_IN;
   pack.exId.res = 0;
@@ -387,7 +397,7 @@ MotorFeedback send_start(uint16_t index) {
   return read_bytes();
 }
 
-MotorFeedback send_set_speed_limit(uint16_t index, uint8_t id, float speed) {
+MotorFeedback send_set_speed_limit(uint8_t id, float speed) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -396,6 +406,7 @@ MotorFeedback send_set_speed_limit(uint16_t index, uint8_t id, float speed) {
   pack.exId.mode = CANCOM_SDO_WRITE;
   pack.exId.res = 0;
 
+  uint16_t index = 0x7017;
   memcpy(&pack.data[0], &index, 2);
   memcpy(&pack.data[4], &speed, 4);
 
@@ -403,7 +414,7 @@ MotorFeedback send_set_speed_limit(uint16_t index, uint8_t id, float speed) {
   return read_bytes();
 }
 
-MotorFeedback send_set_location(uint16_t index, uint8_t id, float location) {
+MotorFeedback send_set_location(uint8_t id, float location) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.len = 8;
@@ -412,6 +423,7 @@ MotorFeedback send_set_location(uint16_t index, uint8_t id, float location) {
   pack.exId.mode = CANCOM_SDO_WRITE;
   pack.exId.res = 0;
 
+  uint16_t index = 0x7016;
   memcpy(&pack.data[0], &index, 2);
   memcpy(&pack.data[4], &location, 4);
 
@@ -454,6 +466,10 @@ MotorFeedback send_motor_control(uint8_t id, float posSet, float velSet,
 
   txdPack(&pack);
   return read_bytes();
+} 
+
+MotorFeedback send_position_control(uint8_t id, float posSet, float kpSet) {
+  return send_motor_control(id, posSet, 0, kpSet, 0, 0);
 }
 
 MotorFeedback send_torque_control(uint8_t id, float torqueSet) {
@@ -471,11 +487,14 @@ int main() {
   MotorFeedback feedback;
 
   // Set mode to calibration
-  feedback = send_set_mode(0x7005, CANCOM_MOTOR_CALI, 1);
+  // feedback = send_set_mode(MIT_MODE, 1); // MIT mode
+  feedback = send_set_mode(POSITION_MODE, 1); // MIT mode
   if (feedback.isSet) {
     std::cout << "Set mode feedback received" << std::endl;
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  
+  send_reset(1);
 
   // Start the motor
   feedback = send_start(1);
@@ -485,67 +504,65 @@ int main() {
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
   // Set speed limit
-  feedback = send_set_speed_limit(0x7017, 1, 2);
+  feedback = send_set_speed_limit(1, 10);
   if (feedback.isSet) {
     std::cout << "Set speed limit feedback received" << std::endl;
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
+  // Set location.
+  feedback = send_set_location(1, 0);
+  std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+
   // Sine wave torque control loop
   const double pi = 3.14159265358979323846;
   const double magnitude = pi / 4;
-  const double period = 2.5;
-  const double duration = 10.0;
-  const double kp = 1.0;
+  const double period = 2.0;
+  const double duration = 0.0;
+  const double kp = 5.0;
 
   auto start_time = std::chrono::steady_clock::now();
   double elapsed_time = 0.0;
   int instruction_count = 0;
-  auto last_second = start_time;
+
+  double desired_torque = 0.0;
 
   while (elapsed_time < duration) {
-    double desired_position =
-        magnitude * std::sin(2 * pi * elapsed_time / period);
-    double current_position = feedback.position;
-    double position_error = desired_position - current_position;
-    double desired_torque = kp * position_error;
-
-    // Send torque control command
-    feedback = send_torque_control(1, desired_torque);
-    instruction_count++;
-
     if (feedback.isSet) {
+      double desired_position =
+          magnitude * std::sin(2 * pi * elapsed_time / period);
+      double current_position = feedback.position;
+      double position_error = desired_position - current_position;
+      desired_torque = kp * position_error;
+ 
       std::cout << "Time: " << std::fixed << std::setprecision(2)
                 << elapsed_time << "s, "
                 << "Desired pos: " << std::setprecision(3) << desired_position
                 << ", "
                 << "Current pos: " << std::setprecision(3) << current_position
                 << ", "
-                << "Torque: " << std::setprecision(3) << desired_torque
+                << "Desired torque: " << std::setprecision(3) << desired_torque
                 << std::endl;
     }
 
-    // Sleep for a short interval (e.g., 20 ms) to avoid overwhelming the motor
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    // Send torque control command
+    feedback = send_torque_control(1, desired_torque);
+    instruction_count++;
+
+    // Sleep for a short interval to avoid overwhelming the motor
+    // std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     // Update elapsed time
     auto current_time = std::chrono::steady_clock::now();
     elapsed_time =
         std::chrono::duration<double>(current_time - start_time).count();
-
-    // Calculate and display instructions per second
-    if (std::chrono::duration_cast<std::chrono::seconds>(current_time -
-                                                         last_second)
-            .count() >= 1) {
-      std::cout << "Instructions per second: " << instruction_count
-                << std::endl;
-      instruction_count = 0;
-      last_second = current_time;
+    if (elapsed_time > 0) {
+        std::cout << "Instructions per second: " << (float)instruction_count / elapsed_time << std::endl;
     }
   }
 
   // Reset the motor after the loop
-  feedback = send_reset(0, 1);
+  feedback = send_reset(1);
   if (feedback.isSet) {
     std::cout << "Reset feedback received" << std::endl;
   }

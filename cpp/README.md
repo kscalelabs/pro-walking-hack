@@ -16,6 +16,7 @@ To set the baudrate on Jetson:
 
 ```bash
 sudo stty -F /dev/ttyCH341USB0 921600
+sudo stty -F /dev/ttyUSB0 921600
 ```
 
 To set the baudrate on MacOS:
