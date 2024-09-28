@@ -8,6 +8,5 @@ Cargo.lock
 .DS_Store
 
 # Large files.
-*.onnx
 lib/
 can_usb/
