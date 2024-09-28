@@ -233,6 +233,10 @@ void read_bytes() {
     std::vector<uint8_t> response;
     char buffer[17];
     ssize_t bytes_read = read(my_serialport, buffer, 17);
+    if (bytes_read == 0) {
+        std::cout << "No bytes read" << std::endl;
+        return;
+    }
 
     std::cout << "rx ";
     for (ssize_t i = 0; i < bytes_read; i++) {
@@ -242,19 +246,22 @@ void read_bytes() {
 
     if (bytes_read == 17 && buffer[0] == 'A' && buffer[1] == 'T') {
         CanPack rxFrame;
-        uint32_t addr = ((uint32_t)buffer[2] << 24) | ((uint32_t)buffer[3] << 16) | ((uint32_t)buffer[4] << 8) | buffer[5];
+
+	uint32_t addr = buffer[5] & 0x000000FF;
+	addr |= (buffer[4] << 8) & 0x0000FF00;
+	addr |= (buffer[3] << 16) & 0x00FF0000;
+	addr |= (buffer[2] << 24) & 0xFF000000;
         addr = addr >> 3;
-
         memcpy(&(rxFrame.exId), &addr, 4);
-        rxFrame.len = buffer[6];
 
+        rxFrame.len = buffer[6];
         for (uint8_t i = 0; i < rxFrame.len; i++) {
             rxFrame.data[i] = buffer[7 + i];
         }
 
-        // Parse the data
+        // Parse the data.
         struct motorStatus mtStatus;
-        uint8_t canIdGet;
+        uint32_t canIdGet;
         uint16_t posIntGet, velIntGet, torqueIntGet;
         float posGet, velGet, torqueGet;
 
@@ -279,7 +286,7 @@ void read_bytes() {
 
         // Print parsed data
         std::cout << "Parsed data:" << std::endl;
-        std::cout << "  Motor ID: " << (int)canIdGet << std::endl;
+        std::cout << "  Motor ID: " << canIdGet << std::endl;
         std::cout << "  Position: " << posGet << std::endl;
         std::cout << "  Velocity: " << velGet << std::endl;
         std::cout << "  Torque: " << torqueGet << std::endl;
@@ -292,8 +299,6 @@ void read_bytes() {
                   << (mtStatus.hallFault ? "Hall " : "")
                   << (mtStatus.noCaliFault ? "NoCali" : "")
                   << std::endl;
-    } else {
-        std::cout << "Received data does not match expected format" << std::endl;
     }
 }
 
@@ -389,14 +394,13 @@ int main() {
   send_start(1);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  send_set_speed_limit(0x7017, 1, 0.5);
+  send_set_speed_limit(0x7017, 1, 2);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
   float offset = 0.1;
   for (int i = 0; i < 5; i++) {
     offset = -offset;
     send_set_location(0x7016, 1, 3.14 + offset);
-    read_bytes();
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
