@@ -24,14 +24,17 @@ def run_onnx_model() -> None:
 
     def get_joint_angles() -> np.ndarray:
         # 获取执行器当前的关节角度
+        # 这部分还需要写
         return np.zeros(10).astype(np.float32)
 
     def get_joint_velocities() -> np.ndarray:
         # 获取执行器的当前角速度
+        # 这部分还需要写
         return np.zeros(10).astype(np.float32)
 
     def send_torques(torques: np.ndarray) -> None:
         # 将扭矩发送到电机
+        # 这部分还需要写
         print(torques)
 
     start_time = time.time()
