@@ -466,7 +466,7 @@ MotorFeedback send_motor_control(uint8_t id, float posSet, float velSet,
 
   txdPack(&pack);
   return read_bytes();
-} 
+}
 
 MotorFeedback send_position_control(uint8_t id, float posSet, float kpSet) {
   return send_motor_control(id, posSet, 0, kpSet, 0, 0);
@@ -493,7 +493,7 @@ int main() {
     std::cout << "Set mode feedback received" << std::endl;
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  
+
   send_reset(1);
 
   // Start the motor
@@ -534,7 +534,7 @@ int main() {
       double current_position = feedback.position;
       double position_error = desired_position - current_position;
       desired_torque = kp * position_error;
- 
+
       std::cout << "Time: " << std::fixed << std::setprecision(2)
                 << elapsed_time << "s, "
                 << "Desired pos: " << std::setprecision(3) << desired_position
@@ -557,7 +557,8 @@ int main() {
     elapsed_time =
         std::chrono::duration<double>(current_time - start_time).count();
     if (elapsed_time > 0) {
-        std::cout << "Instructions per second: " << (float)instruction_count / elapsed_time << std::endl;
+      std::cout << "Instructions per second: "
+                << (float)instruction_count / elapsed_time << std::endl;
     }
   }
 
