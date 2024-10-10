@@ -61,9 +61,10 @@ def main() -> None:
         return torque
 
     # Initialize the motors.
-    for motor, _ in motors:
+    for motor, info in motors:
         motor.send_reset()
-        motor.send_set_zero()
+        if rs_01 := [i for i, kind in info.items() if kind == "01"]:
+            motor.send_set_zero(rs_01)  # Zero the single-encoder motors.
         motor.send_start()
 
     try:
