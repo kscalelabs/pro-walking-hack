@@ -48,7 +48,7 @@ def main() -> None:
         for port_name, motor_infos in PORT_NAMES.items()
     ]
 
-    def get_torque(target_position: float, feedback: RobstrideMotorFeedback) -> float:
+    def get_torque(target_position: float, feedback: RobstrideMotorFeedback, limit: float | None = None) -> float:
         cur_position = feedback.position
         cur_velocity = feedback.velocity
         target_velocity = 0.0
@@ -62,7 +62,9 @@ def main() -> None:
         # kd = 0.0
 
         torque = kp * (target_position - cur_position) + kd * (target_velocity - cur_velocity)
-        return min(max(torque, -TORQUE_LIMIT), TORQUE_LIMIT)
+        if limit is not None:
+            torque = min(max(torque, -limit), limit)
+        return torque
 
     # Initialize the motors.
     for motor, _, _ in motors:
@@ -84,13 +86,18 @@ def main() -> None:
         while still_moving:
             elapsed_time = time.time() - start_time
             dp = elapsed_time * k_dp
+            # After a full rotation, stop.
+            if abs(dp) > math.pi * 2:
+                break
             still_moving = elapsed_time < 0.5
             for motor, port_name, info in motors:
                 if port_name not in start_positions:
                     continue
                 if rs_01 := [i for i, kind in info.items() if kind == "01"]:
                     feedback = motor.get_latest_feedback()
-                    torques = {i: get_torque(start_positions[port_name][i] + dp, feedback[i]) for i in rs_01}
+                    torques = {
+                        i: get_torque(start_positions[port_name][i] + dp, feedback[i], TORQUE_LIMIT) for i in rs_01
+                    }
                     motor.send_torque_controls(torques)
                     still_moving = still_moving or any(abs(torque) < STILL_MOVING_TORQUE for torque in torques.values())
         return get_motor_positions()
