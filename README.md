@@ -6,6 +6,8 @@
 
 ## Commands
 
+To get the path to the onnxruntime library, run `python -c "import onnxruntime; print(onnxruntime..)"`.
+
 Run model on MacOS:
 
 ```bash

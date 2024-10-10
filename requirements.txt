@@ -1,5 +1,11 @@
 # requirements.txt
 
+# Interfacing with sensors.
+actuator
+berryimu
+
+# Running the model.
 torch
 onnx
+onnxruntime
 onnxscript
