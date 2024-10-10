@@ -41,6 +41,10 @@ TORQUE_LIMIT = 1.0
 class SharedState:
     left_is_down: bool = False
     right_is_down: bool = False
+    up_is_down: bool = False
+    down_is_down: bool = False
+    right_toggle: bool = False
+    left_toggle: bool = False
     zero_position: bool = False
 
 
@@ -55,6 +59,20 @@ def gamepad_thread(shared_state: SharedState) -> None:
                 else:
                     shared_state.zero_position = False
 
+            # Right toggle
+            if event.code == "BTN_TR":
+                if event.state == 1:
+                    shared_state.right_toggle = True
+                else:
+                    shared_state.right_toggle = False
+
+            # Left toggle
+            if event.code == "BTN_TL":
+                if event.state == 1:
+                    shared_state.left_toggle = True
+                else:
+                    shared_state.left_toggle = False
+
             # Left-right on pad.
             if event.code == "ABS_X":
                 if event.state > 1000:
@@ -64,6 +82,16 @@ def gamepad_thread(shared_state: SharedState) -> None:
                 else:
                     shared_state.left_is_down = False
                     shared_state.right_is_down = False
+
+            # Up-down on pad.
+            if event.code == "ABS_Y":
+                if event.state < -1000:
+                    shared_state.up_is_down = True
+                elif event.state > 1000:
+                    shared_state.down_is_down = True
+                else:
+                    shared_state.up_is_down = False
+                    shared_state.down_is_down = False
 
 
 def main() -> None:
@@ -89,6 +117,8 @@ def main() -> None:
     gamepad_thread_obj.start()
 
     target_position = 0.0
+    kp = 10.0
+    kd = 1.0
 
     try:
         while True:
@@ -96,6 +126,24 @@ def main() -> None:
                 target_position += 0.1
             elif shared_state.right_is_down:
                 target_position -= 0.1
+
+            if shared_state.up_is_down or shared_state.down_is_down:
+                if shared_state.up_is_down:
+                    if shared_state.right_toggle:
+                        kd += 0.1
+                    else:
+                        kp += 0.1
+                elif shared_state.down_is_down:
+                    if shared_state.right_toggle:
+                        kd -= 0.1
+                    else:
+                        kp -= 0.1
+                print(f"kp: {kp:.2f}, kd: {kd:.2f}")
+
+                for motor, _, info in motors:
+                    for motor_id in info.keys():
+                        motor.set_kp_kd(motor_id, kp, kd)
+
             for motor, _, info in motors:
                 for motor_id in info.keys():
                     motor.set_target_position(motor_id, target_position)
@@ -106,7 +154,7 @@ def main() -> None:
                     for motor_id in info.keys():
                         motor.add_motor_to_zero(motor_id)
 
-            time.sleep(0.01)  # Add a small delay to prevent excessive CPU usage
+            time.sleep(0.025)  # Add a small delay to prevent excessive CPU usage
 
     except KeyboardInterrupt:
         for motor, _, _ in motors:
