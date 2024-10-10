@@ -1,5 +1,8 @@
 """Freezes the motors in place using PD control."""
 
+import math
+import time
+
 from actuator import RobstrideMotorFeedback, RobstrideMotors
 
 # PORT_NAMES = {
@@ -28,8 +31,6 @@ PORT_NAMES = {
     }
 }
 
-MAX_TORQUE = 10.0
-
 
 def main() -> None:
     motors = [
@@ -43,15 +44,21 @@ def main() -> None:
         for port_name, motor_infos in PORT_NAMES.items()
     ]
 
-    def get_torque(id: int, info: dict[int, str], feedback: RobstrideMotorFeedback) -> float:
+    def get_torque(target_position: float, feedback: RobstrideMotorFeedback) -> float:
         cur_position = feedback.position
         cur_velocity = feedback.velocity
-        target_position = 0.0
         target_velocity = 0.0
-        kp = 3.0
+
+        # Position plus velocity.
+        kp = 5.0
         kd = 0.1
+
+        # Just position.
+        # kp = 0.05
+        # kd = 0.0
+
         torque = kp * (target_position - cur_position) + kd * (target_velocity - cur_velocity)
-        return min(max(torque, -MAX_TORQUE), MAX_TORQUE)
+        return torque
 
     # Initialize the motors.
     for motor, _ in motors:
@@ -60,17 +67,24 @@ def main() -> None:
         motor.send_start()
 
     try:
+        start_time = time.time()
         while True:
+            target_position = math.sin(time.time() - start_time) * math.pi
+
             for motor, info in motors:
                 feedback = motor.get_latest_feedback()
-                torques = {i: get_torque(i, info, feedback) for i, feedback in feedback.items()}
+                torques = {i: get_torque(target_position, feedback) for i, feedback in feedback.items()}
                 motor.send_torque_controls(torques)
 
     except KeyboardInterrupt:
         print("Resetting motors")
         for motor, _ in motors:
             motor.send_torque_controls({i: 0.0 for i in info})
+
+        time.sleep(0.1)
+        for motor, _ in motors:
             motor.send_reset()
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":
