@@ -41,22 +41,29 @@ TORQUE_LIMIT = 1.0
 class SharedState:
     left_is_down: bool = False
     right_is_down: bool = False
+    zero_position: bool = False
 
 
 def gamepad_thread(shared_state: SharedState) -> None:
     while True:
         events = get_gamepad()
         for event in events:
-            if event.ev_type == "Absolute":
-                if event.code == "ABS_X":
-                    print(f"Left stick X-axis: {event.state}")
-                    if event.state > 1000:
-                        shared_state.left_is_down = True
-                    elif event.state < -1000:
-                        shared_state.right_is_down = True
-                    else:
-                        shared_state.left_is_down = False
-                        shared_state.right_is_down = False
+            # Red button.
+            if event.code == "BTN_EAST":
+                if event.state == 1:
+                    shared_state.zero_position = True
+                else:
+                    shared_state.zero_position = False
+
+            # Left-right on pad.
+            if event.code == "ABS_X":
+                if event.state > 1000:
+                    shared_state.left_is_down = True
+                elif event.state < -1000:
+                    shared_state.right_is_down = True
+                else:
+                    shared_state.left_is_down = False
+                    shared_state.right_is_down = False
 
 
 def main() -> None:
@@ -89,10 +96,15 @@ def main() -> None:
                 target_position += 0.1
             elif shared_state.right_is_down:
                 target_position -= 0.1
-
             for motor, _, info in motors:
                 for motor_id in info.keys():
                     motor.set_target_position(motor_id, target_position)
+
+            if shared_state.zero_position:
+                target_position = 0.0
+                for motor, _, info in motors:
+                    for motor_id in info.keys():
+                        motor.add_motor_to_zero(motor_id)
 
             time.sleep(0.01)  # Add a small delay to prevent excessive CPU usage
 
