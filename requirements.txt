@@ -4,6 +4,9 @@
 actuator
 berryimu
 
+# Logitech F310 gamepad.
+inputs
+
 # Running the model.
 torch
 onnx

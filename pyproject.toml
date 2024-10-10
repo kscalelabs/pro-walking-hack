@@ -39,6 +39,7 @@ module = [
     "moto.*",
     "mujoco.*",
     "pybullet_utils.*",
+    "inputs.*",
 ]
 
 ignore_missing_imports = true
