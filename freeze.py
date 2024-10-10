@@ -142,8 +142,8 @@ def main() -> None:
     except KeyboardInterrupt:
         for motor, _, _ in motors:
             motor.send_torque_controls({i: 0.0 for i in info})
-
         time.sleep(0.1)
+
         for motor, _, _ in motors:
             motor.send_reset()
         time.sleep(0.1)
