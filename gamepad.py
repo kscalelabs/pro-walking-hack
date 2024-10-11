@@ -47,6 +47,7 @@ class SharedState:
     zero_position: bool = False
     active_motor_index: int = 0
     green_button_pressed: bool = False
+    yellow_button_pressed: bool = False
     blue_button_pressed: bool = False
 
 
@@ -72,14 +73,18 @@ def gamepad_thread(shared_state: SharedState) -> None:
 
             # Joystick Y-axis
             if event.code == "ABS_Y":
-                shared_state.joystick_y = event.state / 32768.0  # Normalize to [-1, 1]
+                shared_state.joystick_y = -event.state / 32768.0  # Normalize to [-1, 1]
 
-            # Green button (cycle forward)
+            # Green button.
             if event.code == "BTN_SOUTH":
                 shared_state.green_button_pressed = event.state == 1
 
-            # Yellow button (cycle backward)
+            # Yellow button.
             if event.code == "BTN_WEST":
+                shared_state.yellow_button_pressed = event.state == 1
+
+            # Blue button.
+            if event.code == "BTN_NORTH":
                 shared_state.blue_button_pressed = event.state == 1
 
 
@@ -121,16 +126,23 @@ def main() -> None:
     try:
         while True:
             if shared_state.green_button_pressed:
-                active_motor_index = (active_motor_index + 1) % num_motors
                 shared_state.green_button_pressed = False
+                active_motor_index = (active_motor_index + 1) % num_motors
                 _, port_name, active_motor_id = all_motors[active_motor_index]
                 print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {active_motor_id}")
 
-            if shared_state.blue_button_pressed:
+            if shared_state.yellow_button_pressed:
+                shared_state.yellow_button_pressed = False
                 active_motor_index = (active_motor_index - 1) % num_motors
-                shared_state.blue_button_pressed = False
                 _, port_name, active_motor_id = all_motors[active_motor_index]
                 print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {active_motor_id}")
+
+            # Zero all motors.
+            if shared_state.blue_button_pressed:
+                shared_state.blue_button_pressed = False
+                for motor, port_name, motor_id in all_motors:
+                    motor.add_motor_to_zero(motor_id)
+                    print(f"Zeroing motor {motor_id} on {port_name}")
 
             active_motor, _, active_motor_id = all_motors[active_motor_index]
 
