@@ -33,19 +33,21 @@ PORT_NAMES = {
     }
 }
 
-STILL_MOVING_TORQUE = 0.1
-TORQUE_LIMIT = 1.0
+DELTA_POSITION = 0.1
+DELTA_KP = 0.4
+DELTA_KD = 0.02
 
 
 @dataclass
 class SharedState:
-    left_is_down: bool = False
-    right_is_down: bool = False
-    up_is_down: bool = False
-    down_is_down: bool = False
+    joystick_x: float = 0.0
+    joystick_y: float = 0.0
     right_toggle: bool = False
     left_toggle: bool = False
     zero_position: bool = False
+    active_motor_index: int = 0
+    green_button_pressed: bool = False
+    blue_button_pressed: bool = False
 
 
 def gamepad_thread(shared_state: SharedState) -> None:
@@ -54,44 +56,31 @@ def gamepad_thread(shared_state: SharedState) -> None:
         for event in events:
             # Red button.
             if event.code == "BTN_EAST":
-                if event.state == 1:
-                    shared_state.zero_position = True
-                else:
-                    shared_state.zero_position = False
+                shared_state.zero_position = event.state == 1
 
             # Right toggle
             if event.code == "BTN_TR":
-                if event.state == 1:
-                    shared_state.right_toggle = True
-                else:
-                    shared_state.right_toggle = False
+                shared_state.right_toggle = event.state == 1
 
             # Left toggle
             if event.code == "BTN_TL":
-                if event.state == 1:
-                    shared_state.left_toggle = True
-                else:
-                    shared_state.left_toggle = False
+                shared_state.left_toggle = event.state == 1
 
-            # Left-right on pad.
+            # Joystick X-axis
             if event.code == "ABS_X":
-                if event.state > 1000:
-                    shared_state.left_is_down = True
-                elif event.state < -1000:
-                    shared_state.right_is_down = True
-                else:
-                    shared_state.left_is_down = False
-                    shared_state.right_is_down = False
+                shared_state.joystick_x = event.state / 32768.0  # Normalize to [-1, 1]
 
-            # Up-down on pad.
+            # Joystick Y-axis
             if event.code == "ABS_Y":
-                if event.state < -1000:
-                    shared_state.up_is_down = True
-                elif event.state > 1000:
-                    shared_state.down_is_down = True
-                else:
-                    shared_state.up_is_down = False
-                    shared_state.down_is_down = False
+                shared_state.joystick_y = event.state / 32768.0  # Normalize to [-1, 1]
+
+            # Green button (cycle forward)
+            if event.code == "BTN_SOUTH":
+                shared_state.green_button_pressed = event.state == 1
+
+            # Yellow button (cycle backward)
+            if event.code == "BTN_WEST":
+                shared_state.blue_button_pressed = event.state == 1
 
 
 def main() -> None:
@@ -107,8 +96,9 @@ def main() -> None:
         for port_name, motor_infos in PORT_NAMES.items()
     ]
 
+    # Zero all the 01 motors on startup.
     for motor, _, info in motors:
-        for motor_id in info.keys():
+        for motor_id, _ in info.items():
             motor.add_motor_to_zero(motor_id)
 
     shared_state = SharedState()
@@ -120,39 +110,49 @@ def main() -> None:
     kp = 10.0
     kd = 1.0
 
+    all_motors: list[tuple[RobstrideMotorsSupervisor, str, int]] = []
+    for motor, port_name, info in motors:
+        for motor_id in info.keys():
+            all_motors.append((motor, port_name, motor_id))
+
+    active_motor_index = 0
+    num_motors = len(all_motors)
+
     try:
         while True:
-            if shared_state.left_is_down:
-                target_position += 0.1
-            elif shared_state.right_is_down:
-                target_position -= 0.1
+            if shared_state.green_button_pressed:
+                active_motor_index = (active_motor_index + 1) % num_motors
+                shared_state.green_button_pressed = False
+                _, port_name, active_motor_id = all_motors[active_motor_index]
+                print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {active_motor_id}")
 
-            if shared_state.up_is_down or shared_state.down_is_down:
-                if shared_state.up_is_down:
-                    if shared_state.right_toggle:
-                        kd += 0.1
-                    else:
-                        kp += 0.1
-                elif shared_state.down_is_down:
-                    if shared_state.right_toggle:
-                        kd -= 0.1
-                    else:
-                        kp -= 0.1
+            if shared_state.blue_button_pressed:
+                active_motor_index = (active_motor_index - 1) % num_motors
+                shared_state.blue_button_pressed = False
+                _, port_name, active_motor_id = all_motors[active_motor_index]
+                print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {active_motor_id}")
+
+            active_motor, _, active_motor_id = all_motors[active_motor_index]
+
+            if abs(shared_state.joystick_x) > 0.05:  # Add a small deadzone
+                target_position += shared_state.joystick_x * DELTA_POSITION
+                print(f"target_position: {target_position:.2f}")
+                active_motor.set_target_position(active_motor_id, target_position)
+
+            if abs(shared_state.joystick_y) > 0.25:  # Add a small deadzone
+                if shared_state.right_toggle:
+                    kd += (shared_state.joystick_y - 0.25) * DELTA_KD
+                else:
+                    kp += (shared_state.joystick_y - 0.25) * DELTA_KP
                 print(f"kp: {kp:.2f}, kd: {kd:.2f}")
-
-                for motor, _, info in motors:
-                    for motor_id in info.keys():
-                        motor.set_kp_kd(motor_id, kp, kd)
-
-            for motor, _, info in motors:
-                for motor_id in info.keys():
-                    motor.set_target_position(motor_id, target_position)
+                active_motor.set_kp_kd(active_motor_id, kp, kd)
 
             if shared_state.zero_position:
                 target_position = 0.0
-                for motor, _, info in motors:
-                    for motor_id in info.keys():
-                        motor.add_motor_to_zero(motor_id)
+                active_motor.set_target_position(active_motor_id, target_position)
+                active_motor.add_motor_to_zero(active_motor_id)
+                print("zeroing active motor")
+                shared_state.zero_position = False
 
             time.sleep(0.025)  # Add a small delay to prevent excessive CPU usage
 
