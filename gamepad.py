@@ -127,12 +127,14 @@ def main() -> None:
         while True:
             if shared_state.green_button_pressed:
                 shared_state.green_button_pressed = False
+                target_position = 0.0
                 active_motor_index = (active_motor_index + 1) % num_motors
                 _, port_name, active_motor_id = all_motors[active_motor_index]
                 print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {active_motor_id}")
 
             if shared_state.yellow_button_pressed:
                 shared_state.yellow_button_pressed = False
+                target_position = 0.0
                 active_motor_index = (active_motor_index - 1) % num_motors
                 _, port_name, active_motor_id = all_motors[active_motor_index]
                 print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {active_motor_id}")
@@ -140,30 +142,37 @@ def main() -> None:
             # Zero all motors.
             if shared_state.blue_button_pressed:
                 shared_state.blue_button_pressed = False
+                target_position = 0.0
                 for motor, port_name, motor_id in all_motors:
+                    motor.set_position(motor_id, target_position)
                     motor.add_motor_to_zero(motor_id)
                     print(f"Zeroing motor {motor_id} on {port_name}")
 
             active_motor, _, active_motor_id = all_motors[active_motor_index]
 
             if abs(shared_state.joystick_x) > 0.05:  # Add a small deadzone
-                target_position += shared_state.joystick_x * DELTA_POSITION
+                velocity = shared_state.joystick_x * DELTA_POSITION
+                target_position += velocity
                 print(f"target_position: {target_position:.2f}")
-                active_motor.set_target_position(active_motor_id, target_position)
+                active_motor.set_position(active_motor_id, target_position)
+                active_motor.set_velocity(active_motor_id, velocity)
+            else:
+                active_motor.set_velocity(active_motor_id, 0.0)
 
             if abs(shared_state.joystick_y) > 0.25:  # Add a small deadzone
                 if shared_state.right_toggle:
                     kd += (shared_state.joystick_y - 0.25) * DELTA_KD
+                    active_motor.set_kd(active_motor_id, kd)
                 else:
                     kp += (shared_state.joystick_y - 0.25) * DELTA_KP
+                    active_motor.set_kp(active_motor_id, kp)
                 print(f"kp: {kp:.2f}, kd: {kd:.2f}")
-                active_motor.set_kp_kd(active_motor_id, kp, kd)
 
             if shared_state.zero_position:
                 target_position = 0.0
-                active_motor.set_target_position(active_motor_id, target_position)
+                active_motor.set_position(active_motor_id, target_position)
                 active_motor.add_motor_to_zero(active_motor_id)
-                print("zeroing active motor")
+                print("Zeroing active motor")
                 shared_state.zero_position = False
 
             time.sleep(0.025)  # Add a small delay to prevent excessive CPU usage
