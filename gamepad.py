@@ -94,7 +94,6 @@ def main() -> None:
             RobstrideMotorsSupervisor(
                 port_name=port_name,
                 motor_infos=motor_infos,
-                verbose=False,
             ),
             port_name,
             motor_infos,
