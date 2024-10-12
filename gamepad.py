@@ -46,6 +46,11 @@ DELTA_KP_BIG = 10.0
 DELTA_KD = 0.01
 DELTA_KD_BIG = 1.0
 
+# Update color constants
+BOLD_GREEN = "\033[1;32m"  # Bold Green
+GREY = "\033[90m"  # Grey
+RESET = "\033[0m"
+
 
 @dataclass
 class SharedState:
@@ -113,6 +118,7 @@ def main() -> None:
             RobstrideMotorsSupervisor(
                 port_name=port_name,
                 motor_infos=motor_infos,
+                target_update_rate=10000.0,
             ),
             port_name,
             motor_infos,
@@ -133,7 +139,7 @@ def main() -> None:
     active_motor_index = 0
     num_motors = len(all_motors)
 
-    last_time = time.time()
+    log_last_time = last_time = time.time()
 
     try:
         while True:
@@ -143,27 +149,31 @@ def main() -> None:
             dt = current_time - last_time
             last_time = current_time
 
-            # Move to the next motor.
-            if shared_state.left_toggle:
-                shared_state.left_toggle = False
-                active_motor_index = (active_motor_index + 1) % num_motors
+            # Move to the next/previous motor
+            if shared_state.left_toggle or shared_state.right_toggle:
+                shared_state.left_toggle = shared_state.right_toggle = False
+                active_motor_index = (active_motor_index + (1 if shared_state.left_toggle else -1)) % num_motors
                 _, port_name, motor_id = all_motors[active_motor_index]
-                print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {motor_id}")
-
-            # Move to the previous motor.
-            if shared_state.right_toggle:
-                shared_state.right_toggle = False
-                active_motor_index = (active_motor_index - 1) % num_motors
-                _, port_name, motor_id = all_motors[active_motor_index]
-                print(f"Active motor: {active_motor_index + 1}/{num_motors} - {port_name} ID {motor_id}")
+                print(
+                    f"Active motor: {BOLD_GREEN}{active_motor_index + 1}{RESET}/{BOLD_GREEN}{num_motors}{RESET} - {port_name} ID {BOLD_GREEN}{motor_id}{RESET}"
+                )
 
             active_motor, port_name, motor_id = all_motors[active_motor_index]
+
+            if current_time - log_last_time > 1.0:
+                log_last_time = current_time
+                failed_commands = active_motor.get_failed_commands()
+                total_commands = active_motor.get_total_commands()
+                update_rate = active_motor.get_actual_update_rate()
+                print(
+                    f"{GREY}Failed commands: {failed_commands}/{total_commands} - Update rate: {update_rate:.2f} Hz{RESET}"
+                )
 
             # Zero the active motor.
             if shared_state.red_button_pressed:
                 shared_state.red_button_pressed = False
                 active_motor.add_motor_to_zero(motor_id)
-                print(f"Zeroing active motor {motor_id} on {port_name}")
+                print(f"Zeroing active motor {BOLD_GREEN}{motor_id}{RESET} on {port_name}")
 
             # Change the active motor's target position.
             if abs(shared_state.joystick_x) > 0.15:  # Add a small deadzone
@@ -172,7 +182,7 @@ def main() -> None:
                     mul *= DELTA_POSITION_BIG_MUL
                 position = active_motor.get_position(motor_id) + mul
                 active_motor.set_position(motor_id, position)
-                print(f"Active motor target position: {position:.2f}")
+                print(f"Active motor target position: {BOLD_GREEN}{position:.2f}{RESET}")
 
             # Change the active motor's target velocity.
             if abs(shared_state.joystick_y) > 0.15:
@@ -181,7 +191,7 @@ def main() -> None:
                     mul *= DELTA_VELOCITY_BIG_MUL
                 velocity = active_motor.get_velocity(motor_id) + mul
                 active_motor.set_velocity(motor_id, velocity)
-                print(f"Active motor target velocity: {velocity:.2f}")
+                print(f"Active motor target velocity: {BOLD_GREEN}{velocity:.2f}{RESET}")
 
             # Change the active motor's KP gain.
             if shared_state.direction_pad_y != 0:
@@ -190,12 +200,12 @@ def main() -> None:
                     kp = (round(kp / DELTA_KP_BIG) - shared_state.direction_pad_y) * DELTA_KP_BIG
                     shared_state.direction_pad_y = 0
                     active_motor.set_kp(motor_id, kp)
-                    print(f"kp: {kp:.2f}")
+                    print(f"kp: {BOLD_GREEN}{kp:.2f}{RESET}")
                 else:
                     kp = active_motor.get_kp(motor_id)
                     kp += -shared_state.direction_pad_y * DELTA_KP
                     active_motor.set_kp(motor_id, kp)
-                    print(f"kp: {kp:.2f}")
+                    print(f"kp: {BOLD_GREEN}{kp:.2f}{RESET}")
 
             # Change the active motor's KD gain.
             if shared_state.direction_pad_x != 0:
@@ -204,12 +214,12 @@ def main() -> None:
                     kd += shared_state.direction_pad_x * DELTA_KD_BIG
                     shared_state.direction_pad_x = 0
                     active_motor.set_kd(motor_id, kd)
-                    print(f"kd: {kd:.2f}")
+                    print(f"kd: {BOLD_GREEN}{kd:.2f}{RESET}")
                 else:
                     kd = active_motor.get_kd(motor_id)
                     kd += shared_state.direction_pad_x * DELTA_KD
                     active_motor.set_kd(motor_id, kd)
-                    print(f"kd: {kd:.2f}")
+                    print(f"kd: {BOLD_GREEN}{kd:.2f}{RESET}")
 
     except KeyboardInterrupt:
         for motor, _, _ in motors:
