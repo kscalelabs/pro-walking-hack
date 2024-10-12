@@ -7,31 +7,31 @@ from dataclasses import dataclass
 from actuator import RobstrideMotorsSupervisor
 from inputs import get_gamepad
 
-# PORT_NAMES = {
-#     # Left leg.
-#     "/dev/ttyUSB0": {
-#         1: "04",
-#         2: "03",
-#         3: "03",
-#         4: "03",
-#         5: "01",
-#     },
-#     # Right leg.
-#     "/dev/ttyUSB1": {
-#         1: "04",
-#         2: "03",
-#         3: "03",
-#         4: "03",
-#         5: "01",
-#     },
-# }
-
 PORT_NAMES = {
-    # Test setup.
+    # Left leg.
     "/dev/ttyUSB0": {
-        2: "01",
-    }
+        1: "04",
+        2: "03",
+        3: "03",
+        4: "03",
+        5: "01",
+    },
+    # Right leg.
+    "/dev/ttyUSB1": {
+        1: "04",
+        2: "03",
+        3: "03",
+        4: "03",
+        5: "01",
+    },
 }
+
+# PORT_NAMES = {
+#     # Test setup.
+#     "/dev/ttyUSB0": {
+#         2: "01",
+#     }
+# }
 
 DELTA_POSITION = 0.1
 DELTA_KP = 0.4
@@ -94,6 +94,7 @@ def main() -> None:
             RobstrideMotorsSupervisor(
                 port_name=port_name,
                 motor_infos=motor_infos,
+                verbose=False,
             ),
             port_name,
             motor_infos,
