@@ -4,6 +4,7 @@ import time
 import numpy as np
 import pybullet as p
 import pybullet_data
+from inputs import get_gamepad
 
 EEL_JOINT = "left_end_effector_joint"
 EER_JOINT = "right_end_effector_joint"
@@ -108,33 +109,44 @@ def inverse_kinematics(arm: str, goal_pos: np.ndarray) -> None:
     error = np.linalg.norm(np.array(target_pos) - np.array(actual_pos))
     print(error)
 
-# Add sliders for controlling the end effector positions
-left_x_slider = p.addUserDebugParameter("Left EE X", -1, 1, goal_pos_left[0])
-left_y_slider = p.addUserDebugParameter("Left EE Y", -1, 1, goal_pos_left[1])
-left_z_slider = p.addUserDebugParameter("Left EE Z", -1, 1, goal_pos_left[2])
+def read_controller_input() -> tuple[float, float, float, bool]:
+    """Reads input from the Logitech controller and returns changes in position and button state."""
+    x_change, y_change, z_change = 0, 0, 0
+    toggle_button_pressed = False
+    events = get_gamepad()
+    for event in events:
+        if event.ev_type == 'Absolute':
+            if event.code == 'ABS_X':  # Left stick horizontal
+                x_change = event.state / 32768.0  # Normalize the value
+            elif event.code == 'ABS_Y':  # Left stick vertical
+                y_change = event.state / 32768.0
+            elif event.code == 'ABS_RZ':  # Right stick vertical
+                z_change = event.state / 32768.0
+        elif event.ev_type == 'Key' and event.code == 'BTN_SOUTH' and event.state == 1:
+            toggle_button_pressed = True
+    return x_change, y_change, z_change, toggle_button_pressed
 
-right_x_slider = p.addUserDebugParameter("Right EE X", -1, 1, goal_pos_right[0])
-right_y_slider = p.addUserDebugParameter("Right EE Y", -1, 1, goal_pos_right[1])
-right_z_slider = p.addUserDebugParameter("Right EE Z", -1, 1, goal_pos_right[2])
+# Initialize which arm to control
+control_left_arm = True
 
 while True:
-    # Update goal positions based on slider values
-    goal_pos_left = np.array([
-        p.readUserDebugParameter(left_x_slider),
-        p.readUserDebugParameter(left_y_slider),
-        p.readUserDebugParameter(left_z_slider)
-    ])
+    # Read controller input
+    x_change, y_change, z_change, toggle_button_pressed = read_controller_input()
 
-    goal_pos_right = np.array([
-        p.readUserDebugParameter(right_x_slider),
-        p.readUserDebugParameter(right_y_slider),
-        p.readUserDebugParameter(right_z_slider)
-    ])
+    # Toggle control between left and right arm
+    if toggle_button_pressed:
+        control_left_arm = not control_left_arm
+        time.sleep(0.2)  # Debounce delay to prevent rapid toggling
+
+    # Update goal positions based on controller input
+    if control_left_arm:
+        goal_pos_left += np.array([x_change, y_change, z_change]) * 0.01
+    else:
+        goal_pos_right += np.array([x_change, y_change, z_change]) * 0.01
 
     inverse_kinematics("left", goal_pos_left)
     inverse_kinematics("right", goal_pos_right)
 
-    p.removeAllUserDebugItems()
     p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20)
     p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20)
 
