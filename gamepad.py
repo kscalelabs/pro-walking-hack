@@ -151,7 +151,7 @@ def main() -> None:
 
             # Move to the next/previous motor
             if shared_state.left_toggle or shared_state.right_toggle:
-                active_motor_index = (active_motor_index + (1 if shared_state.left_toggle else -1)) % num_motors
+                active_motor_index = (active_motor_index + (1 if shared_state.right_toggle else -1)) % num_motors
                 shared_state.left_toggle = shared_state.right_toggle = False
                 _, port_name, motor_id = all_motors[active_motor_index]
                 print(
