@@ -7,32 +7,32 @@ from dataclasses import dataclass
 from actuator import RobstrideMotorsSupervisor
 from inputs import get_gamepad
 
-# PORT_NAMES = {
-#     # Left leg.
-#     "/dev/ttyUSB0": {
-#         1: "04",
-#         2: "03",
-#         3: "03",
-#         4: "03",
-#         5: "01",
-#     },
-#     # Right leg.
-#     "/dev/ttyUSB1": {
-#         1: "04",
-#         2: "03",
-#         3: "03",
-#         4: "03",
-#         5: "01",
-#     },
-# }
-
 PORT_NAMES = {
-    # Test setup.
+    # Left leg.
     "/dev/ttyUSB0": {
         1: "04",
-        2: "01",
-    }
+        2: "03",
+        3: "03",
+        4: "03",
+        5: "01",
+    },
+    # Right leg.
+    "/dev/ttyUSB1": {
+        1: "04",
+        2: "03",
+        3: "03",
+        4: "03",
+        5: "01",
+    },
 }
+
+# PORT_NAMES = {
+#     # Test setup.
+#     "/dev/ttyUSB0": {
+#         1: "04",
+#         2: "01",
+#     }
+# }
 
 DELTA_POSITION = 0.5  # radians / second
 DELTA_POSITION_BIG_MUL = 6.0
@@ -151,22 +151,24 @@ def main() -> None:
 
             # Move to the next/previous motor
             if shared_state.left_toggle or shared_state.right_toggle:
-                shared_state.left_toggle = shared_state.right_toggle = False
                 active_motor_index = (active_motor_index + (1 if shared_state.left_toggle else -1)) % num_motors
+                shared_state.left_toggle = shared_state.right_toggle = False
                 _, port_name, motor_id = all_motors[active_motor_index]
                 print(
-                    f"Active motor: {BOLD_GREEN}{active_motor_index + 1}{RESET}/{BOLD_GREEN}{num_motors}{RESET} - {port_name} ID {BOLD_GREEN}{motor_id}{RESET}"
+                    f"Active motor: {BOLD_GREEN}{active_motor_index + 1}{RESET}/{BOLD_GREEN}{num_motors}{RESET} - "
+                    f"{port_name} ID {BOLD_GREEN}{motor_id}{RESET}"
                 )
 
             active_motor, port_name, motor_id = all_motors[active_motor_index]
 
             if current_time - log_last_time > 1.0:
                 log_last_time = current_time
-                failed_commands = active_motor.get_failed_commands()
-                total_commands = active_motor.get_total_commands()
+                failed_commands = active_motor.get_failed_commands(motor_id)
+                total_commands = active_motor.get_total_commands(motor_id)
                 update_rate = active_motor.get_actual_update_rate()
                 print(
-                    f"{GREY}Failed commands: {failed_commands}/{total_commands} - Update rate: {update_rate:.2f} Hz{RESET}"
+                    f"{GREY}Failed commands: {failed_commands}/{total_commands} - "
+                    f"Update rate: {update_rate:.2f} Hz{RESET}"
                 )
 
             # Zero the active motor.
@@ -213,14 +215,14 @@ def main() -> None:
             if shared_state.direction_pad_x != 0:
                 if shared_state.blue_button_pressed:
                     kd = active_motor.get_kd(motor_id)
-                    kd += shared_state.direction_pad_x * DELTA_KD_BIG
+                    kd = (round(kd / DELTA_KD_BIG) + shared_state.direction_pad_x) * DELTA_KD_BIG
                     shared_state.direction_pad_x = 0
-                    active_motor.set_kd(motor_id, kd)
+                    kd = active_motor.set_kd(motor_id, kd)
                     print(f"kd: {BOLD_GREEN}{kd:.2f}{RESET}")
                 else:
                     kd = active_motor.get_kd(motor_id)
                     kd += shared_state.direction_pad_x * DELTA_KD
-                    active_motor.set_kd(motor_id, kd)
+                    kd = active_motor.set_kd(motor_id, kd)
                     print(f"kd: {BOLD_GREEN}{kd:.2f}{RESET}")
 
     except KeyboardInterrupt:
