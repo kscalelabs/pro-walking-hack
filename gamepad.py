@@ -192,6 +192,8 @@ def main() -> None:
                 velocity = active_motor.get_velocity(motor_id) + mul
                 active_motor.set_velocity(motor_id, velocity)
                 print(f"Active motor target velocity: {BOLD_GREEN}{velocity:.2f}{RESET}")
+            else:
+                active_motor.set_velocity(motor_id, 0.0)
 
             # Change the active motor's KP gain.
             if shared_state.direction_pad_y != 0:
