@@ -22,8 +22,24 @@ PORT_NAMES = {
         2: "03",
         3: "03",
         4: "03",
-        5: "01",
+        # 5: "01",
     },
+    # Left arm.
+    # "/dev/ttyUSB0": {
+    #     1: "03",
+    #     2: "03",
+    #     3: "01",
+    #     4: "01",
+    #     5: "01",
+    # },
+    # Right arm.
+    # "/dev/ttyUSB1": {
+    #     1: "03",
+    #     2: "03",
+    #     3: "01",
+    #     4: "01",
+    #     5: "01",
+    # },
 }
 
 # PORT_NAMES = {
@@ -119,6 +135,7 @@ def main() -> None:
                 port_name=port_name,
                 motor_infos=motor_infos,
                 target_update_rate=10000.0,
+                # verbose=True,
             ),
             port_name,
             motor_infos,
@@ -161,21 +178,29 @@ def main() -> None:
 
             active_motor, port_name, motor_id = all_motors[active_motor_index]
 
+            if not active_motor.is_running():
+                raise Exception("Motor is not running")
+
             if current_time - log_last_time > 1.0:
                 log_last_time = current_time
-                failed_commands = active_motor.get_failed_commands(motor_id)
-                total_commands = active_motor.get_total_commands(motor_id)
-                update_rate = active_motor.get_actual_update_rate()
+                failed_commands = active_motor.failed_commands_for(motor_id)
+                total_commands = active_motor.total_commands
+                update_rate = active_motor.actual_update_rate
                 print(
                     f"{GREY}Failed commands: {failed_commands}/{total_commands} - "
                     f"Update rate: {update_rate:.2f} Hz{RESET}"
                 )
 
-            # Zero the active motor.
             if shared_state.red_button_pressed:
                 shared_state.red_button_pressed = False
+
+                # Zero the active motor.
                 active_motor.add_motor_to_zero(motor_id)
                 print(f"Zeroing active motor {BOLD_GREEN}{motor_id}{RESET} on {port_name}")
+
+                # Toggle serial verses parallel modes.
+                # is_serial = active_motor.toggle_serial()
+                # print(f"Serial mode: {BOLD_GREEN}{is_serial}{RESET}")
 
             # Change the active motor's target position.
             if abs(shared_state.joystick_x) > 0.15:  # Add a small deadzone
