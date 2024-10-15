@@ -1,7 +1,7 @@
 """Simple ik script for Stompy Pro."""
 import argparse
-import time
 import platform
+import time
 
 import numpy as np
 import pybullet as p
