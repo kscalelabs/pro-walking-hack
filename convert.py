@@ -210,10 +210,11 @@ class Actor(nn.Module):
 
         actions = self.policy(x.unsqueeze(0)).squeeze(0)
         actions_scaled = actions * self.action_scale
-        p_gains = self.p_gains
-        d_gains = self.d_gains
-        torques = p_gains * (actions_scaled + self.default_dof_pos - dof_pos) - d_gains * dof_vel
-        return torques, actions, x[41:]
+        # p_gains = self.p_gains
+        # d_gains = self.d_gains
+        # torques = p_gains * (actions_scaled + self.default_dof_pos - dof_pos) - d_gains * dof_vel
+        # return torques, actions, x[41:]
+        return actions_scaled, actions, x[41:]
 
 
 def convert() -> None:
