@@ -7,6 +7,9 @@ berryimu
 # Logitech F310 gamepad.
 inputs
 
+# IK
+pybullet==3.2.6
+
 # Running the model.
 torch
 onnx
