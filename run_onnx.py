@@ -1,14 +1,63 @@
 """Use onnxruntime to run a model."""
 
 import time
+from dataclasses import dataclass
 
 import numpy as np
 import onnxruntime as ort
-
-from actuator import RobstrideMotorsSupervisor
+from actuator import RobstrideMotorFeedback, RobstrideMotorsSupervisor
 from berryimu import IMU, KalmanFilter
 
 I2C_BUS = 7
+
+@dataclass
+class JointData:
+    position: float = 0.0
+    velocity: float = 0.0
+
+@dataclass
+class LegData:
+    hip_y: JointData = JointData()
+    hip_x: JointData = JointData()
+    hip_z: JointData = JointData()
+    knee: JointData = JointData()
+    ankle_y: JointData = JointData()
+
+    def set_feedback(self, feedback: list[RobstrideMotorFeedback]) -> None:
+        self.hip_y.position = feedback[1].position
+        self.hip_x.position = feedback[2].position
+        self.hip_z.position = feedback[3].position
+        self.knee.position = feedback[4].position
+        self.ankle_y.position = feedback[5].position
+
+        self.hip_y.velocity = feedback[1].velocity
+        self.hip_x.velocity = feedback[2].velocity
+        self.hip_z.velocity = feedback[3].velocity
+        self.knee.velocity = feedback[4].velocity
+        self.ankle_y.velocity = feedback[5].velocity
+
+@dataclass
+class ArmData:
+    shoulder_y: JointData = JointData()
+    shoulder_x: JointData = JointData()
+    shoulder_z: JointData = JointData()
+    elbow: JointData = JointData()
+    wrist: JointData = JointData()
+
+    def set_feedback(self, feedback: list[RobstrideMotorFeedback]) -> None:
+        self.shoulder_y.position = feedback[1].position
+        self.shoulder_x.position = feedback[2].position
+        self.shoulder_z.position = feedback[3].position
+        self.elbow.position = feedback[4].position
+        self.wrist.position = feedback[5].position
+
+@dataclass
+class RobotData:
+    left_leg: LegData = LegData()
+    right_leg: LegData = LegData()
+    left_arm: ArmData = ArmData()
+    right_arm: ArmData = ArmData()
+
 
 def run_onnx_model() -> None:
     session = ort.InferenceSession("position_control.onnx")
@@ -35,13 +84,16 @@ def run_onnx_model() -> None:
 
     right_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB1", motor_infos=leg_motor_infos,
                                          target_update_rate=10000.0)
-    
+
     left_arm = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB2", motor_infos=arm_motor_infos,
                                          target_update_rate=10000.0)
     arm_motor_infos.pop(1)
 
     right_arm = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB3", motor_infos=arm_motor_infos,
                                           target_update_rate=10000.0)
+
+
+    robot_data = RobotData()
 
     for i in range(5):
         left_leg.add_motor_to_zero(i + 1)
@@ -87,36 +139,45 @@ def run_onnx_model() -> None:
         angle = kalman_filter.step()
         return np.array([angle.yaw, angle.pitch, angle.roll])
 
-    def get_joint_angles() -> np.ndarray:
-        angles = np.zeros(10).astype(np.float32)
+    def update_motor_data() -> None:
         left_leg_feedback = left_leg.get_latest_feedback()
         right_leg_feedback = right_leg.get_latest_feedback()
-
-        if len(left_leg_feedback) == 0 or len(right_leg_feedback) == 0:
-            return angles
-        
-
-        # For testing
         left_arm_feedback = left_arm.get_latest_feedback()
         right_arm_feedback = right_arm.get_latest_feedback()
 
-        for id in range(5):
-            angles[id] = left_leg_feedback[id + 1].position
-            angles[id + 5] = right_leg_feedback[id + 1].position
-        return angles
+        robot_data.left_leg.set_feedback([left_leg_feedback[i] for i in [1, 2, 3, 4, 5]])
+        robot_data.right_leg.set_feedback([right_leg_feedback[i] for i in [1, 2, 3, 4, 5]])
+        robot_data.left_arm.set_feedback([left_arm_feedback[i] for i in [1, 2, 3, 4, 5]])
+        robot_data.right_arm.set_feedback([right_arm_feedback[i] for i in [1, 2, 3, 4, 5]])
+
+    def get_joint_angles() -> np.ndarray:
+
+        return np.array([
+            robot_data.left_leg.hip_y.position,
+            robot_data.left_leg.hip_x.position,
+            robot_data.left_leg.hip_z.position,
+            robot_data.left_leg.knee.position,
+            robot_data.left_leg.ankle_y.position,
+            robot_data.right_leg.hip_y.position,
+            robot_data.right_leg.hip_x.position,
+            robot_data.right_leg.hip_z.position,
+            robot_data.right_leg.knee.position,
+            robot_data.right_leg.ankle_y.position,
+        ])
 
     def get_joint_velocities() -> np.ndarray:
-        velocities = np.zeros(10).astype(np.float32)
-        left_leg_feedback = left_leg.get_latest_feedback()
-        right_leg_feedback = right_leg.get_latest_feedback()
-
-        if len(left_leg_feedback) == 0 or len(right_leg_feedback) == 0:
-            return velocities
-
-        for id in range(5):
-            velocities[id] = left_leg_feedback[id + 1].velocity
-            velocities[id + 5] = right_leg_feedback[id + 1].velocity
-        return velocities
+        return np.array([
+            robot_data.left_leg.hip_y.velocity,
+            robot_data.left_leg.hip_x.velocity,
+            robot_data.left_leg.hip_z.velocity,
+            robot_data.left_leg.knee.velocity,
+            robot_data.left_leg.ankle_y.velocity,
+            robot_data.right_leg.hip_y.velocity,
+            robot_data.right_leg.hip_x.velocity,
+            robot_data.right_leg.hip_z.velocity,
+            robot_data.right_leg.knee.velocity,
+            robot_data.right_leg.ankle_y.velocity,
+        ])
 
     def send_positions(positions: np.ndarray) -> None:
         for motor_id, angle in enumerate(positions[:5]):
@@ -141,6 +202,8 @@ def run_onnx_model() -> None:
     while True:
         cycle_start_time = time.time()
         elapsed_time = cycle_start_time - start_time
+
+        update_motor_data()
 
         input_data["t.1"][0] = np.float32(elapsed_time)
         input_data["dof_pos.1"] = get_joint_angles().astype(np.float32)

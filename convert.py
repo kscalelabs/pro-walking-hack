@@ -68,6 +68,9 @@ ISAAC_TO_REAL_ANGLES = {
     "R_knee": 0.0,
 }
 
+# Temporary solution to no calibration
+ISAAC_TO_REAL_ANGLES = {k: -1 * v for k, v in DEFAULT_JOINT_ANGLES.items()}
+
 STIFFNESS = {"hip_y": 120, "hip_x": 60, "hip_z": 60, "knee": 120, "ankle_y": 17}
 DAMPING = {"hip_y": 10, "hip_x": 10, "hip_z": 10, "knee": 10, "ankle_y": 5}
 
