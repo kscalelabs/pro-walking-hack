@@ -55,6 +55,19 @@ DEFAULT_JOINT_ANGLES = {
     "R_knee": 0.441,
 }
 
+ISAAC_TO_REAL_ANGLES = {
+    "L_ankle_y": 0.0,
+    "L_hip_y": 0.0,
+    "L_hip_z": 0.0,
+    "L_hip_x": 0.0,
+    "L_knee": 0.0,
+    "R_ankle_y": 0.0,
+    "R_hip_y": 0.0,
+    "R_hip_z": 0.0,
+    "R_hip_x": 0.0,
+    "R_knee": 0.0,
+}
+
 STIFFNESS = {"hip_y": 120, "hip_x": 60, "hip_z": 60, "knee": 120, "ankle_y": 17}
 DAMPING = {"hip_y": 10, "hip_x": 10, "hip_z": 10, "knee": 10, "ankle_y": 5}
 
@@ -118,10 +131,12 @@ class Actor(nn.Module):
         self.p_gains = torch.zeros(NUM_ACTIONS, dtype=torch.float)
         self.d_gains = torch.zeros(NUM_ACTIONS, dtype=torch.float)
         self.default_dof_pos = torch.zeros(NUM_ACTIONS, dtype=torch.float)
+        self.isaac_to_real_angles = torch.zeros(NUM_ACTIONS, dtype=torch.float)
 
         for i in range(len(DOF_NAMES)):
             name = DOF_NAMES[i]
             self.default_dof_pos[i] = DEFAULT_JOINT_ANGLES[name]
+            self.isaac_to_real_angles[i] = ISAAC_TO_REAL_ANGLES[name]
             found = False
 
             for dof_name in STIFFNESS.keys():
@@ -159,7 +174,7 @@ class Actor(nn.Module):
             x_vel: The x-coordinate of the target velocity, with shape (1).
             y_vel: The y-coordinate of the target velocity, with shape (1).
             rot: The target angular velocity, with shape (1).
-            t: The current time, with shape (1).
+            t: The current time since start, with shape (1).
             dof_pos: The current angular position of the DoFs, with shape (10).
             dof_vel: The current angular velocity of the DoFs, with shape (10).
             prev_actions: The previous actions taken by the model, with shape (10).
@@ -176,7 +191,7 @@ class Actor(nn.Module):
             The torques to apply to the DoFs, the actions taken, and the
             next buffer.
         """
-        phase = t * 0.02 / 0.5  # 50 Hz policy, 0.5 sec cycle time
+        phase = t / 0.5  # 0.5 sec cycle time
         sin_pos = torch.sin(2 * torch.pi * phase)
         cos_pos = torch.cos(2 * torch.pi * phase)
 
@@ -210,10 +225,7 @@ class Actor(nn.Module):
 
         actions = self.policy(x.unsqueeze(0)).squeeze(0)
         actions_scaled = actions * self.action_scale
-        p_gains = self.p_gains
-        d_gains = self.d_gains
-        torques = p_gains * (actions_scaled + self.default_dof_pos - dof_pos) - d_gains * dof_vel
-        return torques, actions, x[41:]
+        return actions_scaled + self.default_dof_pos + self.isaac_to_real_angles, actions, x[41:]
 
 
 def convert() -> None:
