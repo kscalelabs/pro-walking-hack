@@ -208,8 +208,8 @@ class Actor(nn.Module):
             ),
             dim=0,
         )
-
-        q = (dof_pos - self.default_dof_pos) * self.dof_pos_scale
+        # dof_pos + real_to_isaac
+        q = ((dof_pos - self.isaac_to_real_angles) - self.default_dof_pos) * self.dof_pos_scale
         dq = dof_vel * self.dof_vel_scale
 
         new_x = torch.cat(
@@ -228,7 +228,7 @@ class Actor(nn.Module):
 
         actions = self.policy(x.unsqueeze(0)).squeeze(0)
         actions_scaled = actions * self.action_scale
-        return actions_scaled + self.default_dof_pos + self.isaac_to_real_angles, actions, x[41:]
+        return (actions_scaled + self.default_dof_pos) + self.isaac_to_real_angles, actions, x[41:]
 
 
 def convert() -> None:

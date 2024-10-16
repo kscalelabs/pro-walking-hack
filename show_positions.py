@@ -2,7 +2,7 @@
 
 import time
 
-from actuator import RobstrideMotors
+from actuator import RobstrideMotorsSupervisor
 
 PORT_NAMES = {
     # Test setup.
@@ -15,7 +15,7 @@ PORT_NAMES = {
 def main() -> None:
     motors = [
         (
-            RobstrideMotors(
+            RobstrideMotorsSupervisor(
                 port_name=port_name,
                 motor_infos=motor_infos,
             ),

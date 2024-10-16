@@ -13,6 +13,7 @@ I2C_BUS = 7
 PD_CONSTANTS = {
     1: {
         "name": "hip_y",
+        # "p": 200,
         "p": 300,
         "d": 9,
     },
@@ -23,7 +24,8 @@ PD_CONSTANTS = {
     },
     3: {
         "name": "hip_z",
-        "p": 200,
+        # "p": 200,
+        "p": 100,
         "d": 10,
     },
     4: {
@@ -125,13 +127,13 @@ def run_onnx_model() -> None:
     # TODO: Check how the imu works in sim
     euler_offsets = -1 * np.array([calibration_angle.yaw, calibration_angle.pitch, calibration_angle.roll])
 
-    left_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB0", motor_infos=leg_motor_infos,
-                                        target_update_rate=10000.0,
-                                        can_timeout=1000.0)
+    # left_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB0", motor_infos=leg_motor_infos,
+    #                                     target_update_rate=10000.0,
+    #                                     can_timeout=200.0)
 
-    right_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB2", motor_infos=leg_motor_infos,
+    right_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB1", motor_infos=leg_motor_infos,
                                          target_update_rate=10000.0,
-                                         can_timeout=1000.0)
+                                         can_timeout=200.0)
 
     # left_arm = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB2", motor_infos=arm_motor_infos,
     #                                      target_update_rate=10000.0)
@@ -142,22 +144,26 @@ def run_onnx_model() -> None:
 
     robot_data = RobotData()
 
-    for i in range(5):
-        left_leg.add_motor_to_zero(i + 1)
-        right_leg.add_motor_to_zero(i + 1)
+    for id in [1, 2, 3, 4, 5]:
+        # left_leg.add_motor_to_zero(i + 1)
+        right_leg.add_motor_to_zero(id)
+
         # left_arm.add_motor_to_zero(i + 1)
         # if i != 0:
         #     right_arm.add_motor_to_zero(i + 1)
-        time.sleep(0.01)
-        
-    for motor_id, motor_info in PD_CONSTANTS.items():
-        left_leg.set_kp(motor_id, motor_info["p"])
-        time.sleep(0.01)
-        left_leg.set_kd(motor_id, motor_info["d"])
+        time.sleep(0.1)
 
-        # right_leg.set_kp(motor_id, motor_info["p"])
+    time.sleep(1)
+
+    for motor_id, motor_info in PD_CONSTANTS.items():
+
+        # left_leg.set_kp(motor_id, motor_info["p"])
         # time.sleep(0.01)
-        # right_leg.set_kd(motor_id, motor_info["d"])
+        # left_leg.set_kd(motor_id, motor_info["d"])
+
+        right_leg.set_kp(motor_id, motor_info["p"])
+        time.sleep(0.01)
+        right_leg.set_kd(motor_id, motor_info["d"])
 
 
     input_data = {
@@ -191,26 +197,29 @@ def run_onnx_model() -> None:
         return np.deg2rad([angle.yaw, angle.pitch, angle.roll] * euler_signs + euler_offsets)
 
     def update_motor_data() -> None:
-        left_leg_feedback = left_leg.get_latest_feedback()
+        # left_leg_feedback = left_leg.get_latest_feedback()
         right_leg_feedback = right_leg.get_latest_feedback()
+
         # left_arm_feedback = left_arm.get_latest_feedback()
         # right_arm_feedback = right_arm.get_latest_feedback()
 
-        if len(left_leg_feedback) == 5:
-            robot_data.left_leg.set_feedback([left_leg_feedback[i] for i in [1, 2, 3, 4, 5]])
-        else:
-            print(f"Left leg feedback length is not 5: {len(left_leg_feedback)}")
-            print(f"Left leg feedback: {left_leg_feedback}")
+        # if len(left_leg_feedback) == 5:
+        #     robot_data.left_leg.set_feedback([left_leg_feedback[i] for i in [1, 2, 3, 4, 5]])
+        # else:
+        #     print(f"Left leg feedback length is not 5: {len(left_leg_feedback)}")
+        #     print(f"Left leg feedback: {left_leg_feedback}")
 
         if len(right_leg_feedback) == 5:
             robot_data.right_leg.set_feedback([right_leg_feedback[i] for i in [1, 2, 3, 4, 5]])
+            right_feedback_ordered = [right_leg_feedback[i] for i in [1, 2, 3, 4, 5]]
+            print(f"Right leg feedback: {right_feedback_ordered}")
         else:
             print(f"Right leg feedback length is not 5: {len(right_leg_feedback)}")
 
         # if len(left_arm_feedback) == 5:
         #     robot_data.left_arm.set_feedback([left_arm_feedback[i] for i in [1, 2, 3, 4, 5]])
         
-        # First motor on right arm is currently broken.
+        # # First motor on right arm is currently broken.
         # if len(right_arm_feedback) == 4:
         #     robot_data.right_arm.set_feedback([right_arm_feedback[2]] + [right_arm_feedback[i] for i in [2, 3, 4, 5]])
         # else:
@@ -218,18 +227,20 @@ def run_onnx_model() -> None:
 
     def get_joint_angles() -> np.ndarray:
 
-        return np.array([
-            robot_data.left_leg.hip_y.position,
-            robot_data.left_leg.hip_x.position,
-            robot_data.left_leg.hip_z.position,
-            robot_data.left_leg.knee.position,
-            robot_data.left_leg.ankle_y.position,
-            robot_data.right_leg.hip_y.position,
-            robot_data.right_leg.hip_x.position,
-            robot_data.right_leg.hip_z.position,
-            robot_data.right_leg.knee.position,
-            robot_data.right_leg.ankle_y.position,
-        ])
+        return np.zeros(10, dtype=np.float32)
+
+        # return np.array([
+        #     robot_data.left_leg.hip_y.position,
+        #     robot_data.left_leg.hip_x.position,
+        #     robot_data.left_leg.hip_z.position,
+        #     robot_data.left_leg.knee.position,
+        #     robot_data.left_leg.ankle_y.position,
+        #     robot_data.right_leg.hip_y.position,
+        #     robot_data.right_leg.hip_x.position,
+        #     robot_data.right_leg.hip_z.position,
+        #     robot_data.right_leg.knee.position,
+        #     robot_data.right_leg.ankle_y.position,
+        # ])
 
     def get_joint_velocities() -> np.ndarray:
         return np.array([
@@ -246,10 +257,10 @@ def run_onnx_model() -> None:
         ])
 
     def send_positions(positions: np.ndarray) -> None:
-        for motor_id, angle in enumerate(positions[:5]):
-            # angle = 0
-            left_leg.set_position(motor_id + 1, angle)
-            time.sleep(0.01)
+        # for motor_id, angle in enumerate(positions[:5]):
+        #     # angle = 0
+        #     left_leg.set_position(motor_id + 1, angle)
+        #     time.sleep(0.01)
 
         for motor_id, angle in enumerate(positions[5:]):
             # angle = 0
@@ -293,7 +304,7 @@ def run_onnx_model() -> None:
         send_positions(positions)
         # print(f"euler: {input_data['imu_euler_xyz.1']}, joint angles: {input_data['dof_pos.1']}")
         # run_arms()
-        print(f"positions: {positions}")
+        # print(f"positions: {positions}")
 
         cycle_end_time = time.time()
         cycle_duration = cycle_end_time - cycle_start_time
@@ -301,115 +312,7 @@ def run_onnx_model() -> None:
         time.sleep(sleep_time)
         # print(f"Slept for {sleep_time:.6f} seconds to maintain 50 Hz cycle rate")
 
-def fix_me() -> None:
-    print("starting fix_me")
-    leg_motor_infos = {
-        1: "04",
-        2: "03",
-        3: "03",
-        4: "04",
-        5: "01",
-    }
-
-    left_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB0", motor_infos=leg_motor_infos,
-                                        target_update_rate=10000.0,
-                                        can_timeout=1000.0)
-
-    right_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB2", motor_infos=leg_motor_infos,
-                                         target_update_rate=10000.0,
-                                         can_timeout=1000.0)
-
-    robot_data = RobotData()
-
-    for i in range(5):
-        left_leg.add_motor_to_zero(i + 1)
-        right_leg.add_motor_to_zero(i + 1)
-        # left_arm.add_motor_to_zero(i + 1)
-        # if i != 0:
-        #     right_arm.add_motor_to_zero(i + 1)
-        time.sleep(0.01)
-        
-    for motor_id, motor_info in PD_CONSTANTS.items():
-        left_leg.set_kp(motor_id, motor_info["p"])
-        time.sleep(0.01)
-        left_leg.set_kd(motor_id, motor_info["d"])
-
-        right_leg.set_kp(motor_id, motor_info["p"])
-        time.sleep(0.01)
-        right_leg.set_kd(motor_id, motor_info["d"])
-
-
-    start_time = time.time()
-    target_cycle_time = 1 / 50 # 50 Hz cycle rate
-    while True:
-        cycle_start_time = time.time()
-        elapsed_time = cycle_start_time - start_time
-
-        left_leg_feedback = left_leg.get_latest_feedback()
-        right_leg_feedback = right_leg.get_latest_feedback()
-
-        print("if is running: ", left_leg.is_running())
-        print("")
-        
-
-        # ['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__',
-        #  '__getattribute__', '__getstate__', '__gt__', '__hash__', '__init__', '__init_subclass__',
-        #  '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '
-        # __setattr__', '__sizeof__', '__str__', '__subclasshook__', 'actual_update_rate', 'add_motor_to_zero', '
-        # failed_commands_for', 'get_kd', 'get_kp', 'get_latest_feedback', 'get_position', 'get_torque', 'get_velocity', 
-        # 'is_running', 'max_update_rate', 'reset_command_counters', 'serial', 'set_kd', 'set_kp', 'set_params', 
-        # 'set_position', 'set_torque', 'set_velocity', 'stop', 'toggle_pause', 'toggle_serial', 'total_commands']
-
-  
-        print("NUMBER OF ITERATION: ", elapsed_time)
-        print("--------")
-        print("right", len(left_leg_feedback))
-        print("left", len(right_leg_feedback))
-
-        print(left_leg_feedback)
-        print(right_leg_feedback)
-
-        cycle_end_time = time.time()
-        cycle_duration = cycle_end_time - cycle_start_time
-        sleep_time = max(0, target_cycle_time - cycle_duration)
-        time.sleep(sleep_time)
-
-
-def run_onnx_model_test() -> None:
-    session = ort.InferenceSession("position_control.onnx")
-    input_data = {
-        "x_vel.1": np.zeros(1, dtype=np.float32),
-        "y_vel.1": np.zeros(1, dtype=np.float32),
-        "rot.1": np.zeros(1, dtype=np.float32),
-        "t.1": np.zeros(1, dtype=np.float32),
-        "dof_pos.1": [-12.5, -12.5, -12.5, 0, 0, 12.5, 12.5, 12.5, 0, 0],
-        "dof_vel.1": np.zeros(10, dtype=np.float32),
-        "prev_actions.1": np.zeros(10, dtype=np.float32),
-        "imu_ang_vel.1": np.zeros(3, dtype=np.float32),
-        "imu_euler_xyz.1": np.zeros(3, dtype=np.float32),
-        "buffer.1": np.zeros(574, dtype=np.float32),
-    }
-
-    target_cycle_time = 1 / 50 # 50 Hz cycle rate
-    start_time = time.time()
-
-    while True:
-        cycle_start_time = time.time()
-        elapsed_time = cycle_start_time - start_time
-        positions, actions, buffer = session.run(None, input_data)
-        breakpoint()
-        print(positions)
-
-        cycle_end_time = time.time()
-        cycle_duration = cycle_end_time - cycle_start_time
-        sleep_time = max(0, target_cycle_time - cycle_duration)
-        time.sleep(sleep_time)
 
 if __name__ == "__main__":
     # python run_onnx.py
-    # run_onnx_model()
-    fix_me()
-    # run_onnx_model_test()
-
-
-
+    run_onnx_model()
