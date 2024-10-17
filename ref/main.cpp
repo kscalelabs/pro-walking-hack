@@ -485,87 +485,96 @@ int main() {
     return -1;
 
   MotorFeedback feedback;
+  const int num_motors = 5;
 
-  // Set mode to calibration
-  // feedback = send_set_mode(MIT_MODE, 1); // MIT mode
-  feedback = send_set_mode(POSITION_MODE, 1); // MIT mode
-  if (feedback.isSet) {
-    std::cout << "Set mode feedback received" << std::endl;
+  // Initialize all motors
+  for (int id = 1; id <= num_motors; ++id) {
+    // Set mode to MIT mode
+    feedback = send_set_mode(MIT_MODE, id);
+    if (feedback.isSet) {
+      std::cout << "Set mode feedback received for motor " << id << std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    send_reset(id);
+
+    // Start the motor
+    feedback = send_start(id);
+    if (feedback.isSet) {
+      std::cout << "Start feedback received for motor " << id << std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // Set speed limit
+    feedback = send_set_speed_limit(id, 10);
+    if (feedback.isSet) {
+      std::cout << "Set speed limit feedback received for motor " << id
+                << std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // Set initial position to 0
+    feedback = send_set_location(id, 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  send_reset(1);
-
-  // Start the motor
-  feedback = send_start(1);
-  if (feedback.isSet) {
-    std::cout << "Start feedback received" << std::endl;
-  }
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-  // Set speed limit
-  feedback = send_set_speed_limit(1, 10);
-  if (feedback.isSet) {
-    std::cout << "Set speed limit feedback received" << std::endl;
-  }
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-  // Set location.
-  feedback = send_set_location(1, 0);
-  std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-
-  // Sine wave torque control loop
+  // Sine wave control parameters
   const double pi = 3.14159265358979323846;
   const double magnitude = pi / 4;
   const double period = 2.0;
-  const double duration = 0.0;
+  const double duration = 10.0; // Run for 10 seconds
   const double kp = 5.0;
+  const double kd = 0.1;
 
   auto start_time = std::chrono::steady_clock::now();
   double elapsed_time = 0.0;
   int instruction_count = 0;
 
-  double desired_torque = 0.0;
+  std::vector<double> desired_positions(num_motors);
+  std::vector<double> desired_velocities(num_motors);
 
   while (elapsed_time < duration) {
-    if (feedback.isSet) {
-      double desired_position =
-          magnitude * std::sin(2 * pi * elapsed_time / period);
-      double current_position = feedback.position;
-      double position_error = desired_position - current_position;
-      desired_torque = kp * position_error;
+    for (int id = 1; id <= num_motors; ++id) {
+      double phase_offset =
+          2 * pi * (id - 1) / num_motors; // Offset each motor's phase
+      desired_positions[id - 1] =
+          magnitude * std::sin(2 * pi * elapsed_time / period + phase_offset);
 
-      std::cout << "Time: " << std::fixed << std::setprecision(2)
-                << elapsed_time << "s, "
-                << "Desired pos: " << std::setprecision(3) << desired_position
-                << ", "
-                << "Current pos: " << std::setprecision(3) << current_position
-                << ", "
-                << "Desired torque: " << std::setprecision(3) << desired_torque
-                << std::endl;
+      // Send position control command
+      feedback = send_position_control(id, desired_positions[id - 1], kp);
+      instruction_count++;
+
+      if (feedback.isSet) {
+        std::cout << "Motor " << id << " - Time: " << std::fixed
+                  << std::setprecision(2) << elapsed_time << "s, "
+                  << "Desired pos: " << std::setprecision(3)
+                  << desired_positions[id - 1]
+                  << ", Current pos: " << std::setprecision(3)
+                  << feedback.position
+                  << ", Current vel: " << std::setprecision(3)
+                  << feedback.velocity << std::endl;
+      }
     }
-
-    // Send torque control command
-    feedback = send_torque_control(1, desired_torque);
-    instruction_count++;
-
-    // Sleep for a short interval to avoid overwhelming the motor
-    // std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     // Update elapsed time
     auto current_time = std::chrono::steady_clock::now();
     elapsed_time =
         std::chrono::duration<double>(current_time - start_time).count();
-    if (elapsed_time > 0) {
-      std::cout << "Instructions per second: "
-                << (float)instruction_count / elapsed_time << std::endl;
+
+    // Log frequency every second
+    if (int(elapsed_time) > int(elapsed_time - 0.1)) {
+      double frequency = instruction_count / elapsed_time;
+      std::cout << "Instructions per second: " << std::fixed
+                << std::setprecision(2) << frequency << " Hz" << std::endl;
     }
   }
 
-  // Reset the motor after the loop
-  feedback = send_reset(1);
-  if (feedback.isSet) {
-    std::cout << "Reset feedback received" << std::endl;
+  // Reset all motors after the loop
+  for (int id = 1; id <= num_motors; ++id) {
+    feedback = send_reset(id);
+    if (feedback.isSet) {
+      std::cout << "Reset feedback received for motor " << id << std::endl;
+    }
   }
 
   // Close the serial port when done
