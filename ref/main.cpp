@@ -11,6 +11,7 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <fstream>
 
 #define CAN_ID_MASTER (0X00)        // Control host address - SPIE
 #define CAN_ID_MOTOR_DEFAULT (0X7F) // Default motor address - Unconfigured ID
@@ -18,18 +19,17 @@
 #define CAN_ID_DEBUG_UI (0XFD)  // Debug address - Upper computer address
 
 #define BAUDRATE 921600
-#define VERBOSE 0
 
 #if __linux__
 // #define TTY_PORT "/dev/ttyCH341USB0"
-#define TTY_PORT "/dev/ttyUSB0"
+#define TTY_PORT "/dev/ttyCH341USB1"
 #elif __APPLE__
 #define TTY_PORT "/dev/tty.wchusbserial110"
 #else
 #error "Unsupported platform"
 #endif
 
-#define MOTOR_TYPE 1
+#define MOTOR_TYPE 3
 
 #if MOTOR_TYPE == 1
 
@@ -75,8 +75,6 @@
 #error "Unsupported motor type"
 
 #endif
-
-const int motor_ids[] = {2};
 
 enum canComMode {
   CANCOM_ANNOUNCE_DEVID = 0,
@@ -145,7 +143,9 @@ struct CanPack {
 
 int my_serialport;
 
-void txdPack(CanPack *pack) {
+std::ofstream logFile("communication_log.txt");
+
+void txdPack(CanPack* pack) {
   std::vector<uint8_t> Pack;
 
   if (pack->len < 1) {
@@ -165,10 +165,10 @@ void txdPack(CanPack *pack) {
   memcpy(&addr, &(pack->exId), 4);
   addr = (addr << 3) | (0x00000004);
 
-  Pack[2] = (uint8_t)((addr & 0xFF000000) >> 24);
-  Pack[3] = (uint8_t)((addr & 0x00FF0000) >> 16);
-  Pack[4] = (uint8_t)((addr & 0x0000FF00) >> 8);
-  Pack[5] = (uint8_t)((addr & 0x000000FF));
+  Pack[2] = (uint8_t) ((addr & 0xFF000000) >> 24);
+  Pack[3] = (uint8_t) ((addr & 0x00FF0000) >> 16);
+  Pack[4] = (uint8_t) ((addr & 0x0000FF00) >> 8);
+  Pack[5] = (uint8_t) ((addr & 0x000000FF));
   Pack[6] = pack->len;
 
   for (uint8_t i = 0; i < pack->len; i++)
@@ -177,32 +177,29 @@ void txdPack(CanPack *pack) {
   Pack[7 + pack->len] = '\r';
   Pack[8 + pack->len] = '\n';
 
-// Print the full string of bits being sent
-#if VERBOSE
-  std::cout << "tx ";
+  // Write the tx data to the log file
+  logFile << "tx ";
   for (size_t i = 0; i < Pack.size(); ++i) {
-    std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)Pack[i]
-              << " ";
+    logFile << std::setfill('0') << std::setw(2) << std::hex << (int) Pack[i] << " ";
   }
-  std::cout << std::dec << std::endl;
-#endif
+  logFile << std::dec << std::endl;
 
   // Write the data
   ssize_t bytes_written =
-      write(my_serialport, Pack.data(), (uint16_t)Pack.size());
+    write(my_serialport, Pack.data(), (uint16_t) Pack.size());
   if (bytes_written < 0) {
     std::cerr << "Error writing to serial port: " << strerror(errno)
-              << std::endl;
+      << std::endl;
   } else if (bytes_written != Pack.size()) {
     std::cerr << "Warning: Not all bytes written. Expected " << Pack.size()
-              << ", wrote " << bytes_written << std::endl;
+      << ", wrote " << bytes_written << std::endl;
   }
 
   // Clear the buffer
   tcflush(my_serialport, TCIFLUSH);
 }
 
-int initSerialPort(const char *device) {
+int initSerialPort(const char* device) {
   std::cout << "Initializing serial port: " << device << std::endl;
 
   int fd = open(device, O_RDWR | O_NOCTTY | O_NDELAY);
@@ -232,7 +229,7 @@ int initSerialPort(const char *device) {
 
   // Enable the receiver and set local mode
   options.c_cflag |=
-      CREAD | CLOCAL; // Turn on READ & ignore ctrl lines (CLOCAL = 1)
+    CREAD | CLOCAL; // Turn on READ & ignore ctrl lines (CLOCAL = 1)
 
   // Set raw input/output mode
   options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
@@ -246,7 +243,7 @@ int initSerialPort(const char *device) {
   // Apply the settings
   if (tcsetattr(fd, TCSANOW, &options) != 0) {
     std::cerr << "Error setting terminal attributes: " << strerror(errno)
-              << std::endl;
+      << std::endl;
     close(fd);
     return -1;
   }
@@ -255,17 +252,17 @@ int initSerialPort(const char *device) {
   struct termios verifyOptions;
   if (tcgetattr(fd, &verifyOptions) != 0) {
     std::cerr << "Error getting terminal attributes: " << strerror(errno)
-              << std::endl;
+      << std::endl;
     close(fd);
     return -1;
   }
 
   if (verifyOptions.c_cflag != options.c_cflag ||
-      verifyOptions.c_iflag != options.c_iflag ||
-      verifyOptions.c_oflag != options.c_oflag ||
-      verifyOptions.c_lflag != options.c_lflag) {
+    verifyOptions.c_iflag != options.c_iflag ||
+    verifyOptions.c_oflag != options.c_oflag ||
+    verifyOptions.c_lflag != options.c_lflag) {
     std::cerr << "Serial port settings do not match the requested configuration"
-              << std::endl;
+      << std::endl;
     close(fd);
     return -1;
   }
@@ -280,7 +277,7 @@ int initSerialPort(const char *device) {
 float uint_to_float(int x_int, float x_min, float x_max, int bits) {
   float span = x_max - x_min;
   float offset = x_min;
-  return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
+  return ((float) x_int) * span / ((float) ((1 << bits) - 1)) + offset;
 }
 
 struct MotorFeedback {
@@ -294,8 +291,8 @@ struct MotorFeedback {
 };
 
 MotorFeedback read_bytes() {
-  MotorFeedback feedback = {0, 0.0f, 0.0f, 0.0f, MT_MODE_RESET,
-                            0, false}; // Initialize isSet to false
+  MotorFeedback feedback = { 0, 0.0f, 0.0f, 0.0f, MT_MODE_RESET,
+                            0, false }; // Initialize isSet to false
   std::vector<uint8_t> response;
   char buffer[17];
   ssize_t bytes_read = read(my_serialport, buffer, 17);
@@ -304,14 +301,13 @@ MotorFeedback read_bytes() {
     return feedback;
   }
 
-#if VERBOSE
-  std::cout << "rx ";
+  // Write the rx data to the log file
+  logFile << "rx ";
   for (ssize_t i = 0; i < bytes_read; i++) {
-    std::cout << std::hex << std::setw(2) << std::setfill('0')
-              << (int)(unsigned char)buffer[i] << ' ' << std::dec;
+    logFile << std::hex << std::setw(2) << std::setfill('0')
+      << (int) (unsigned char) buffer[i] << ' ';
   }
-  std::cout << std::endl;
-#endif
+  logFile << std::dec << std::endl;
 
   if (bytes_read == 17 && buffer[0] == 'A' && buffer[1] == 'T') {
     CanPack rxFrame;
@@ -331,11 +327,11 @@ MotorFeedback read_bytes() {
     // Parse the data
     feedback.canId = rxFrame.exId.data & 0x00FF;
     feedback.faults = (rxFrame.exId.data & 0x3F00) >> 8;
-    feedback.mode = (enum motorMode)((rxFrame.exId.data & 0xC000) >> 14);
+    feedback.mode = (enum motorMode) ((rxFrame.exId.data & 0xC000) >> 14);
 
-    uint16_t posIntGet = ((int)rxFrame.data[0] << 8) | rxFrame.data[1];
-    uint16_t velIntGet = ((int)rxFrame.data[2] << 8) | rxFrame.data[3];
-    uint16_t torqueIntGet = ((int)rxFrame.data[4] << 8) | rxFrame.data[5];
+    uint16_t posIntGet = ((int) rxFrame.data[0] << 8) | rxFrame.data[1];
+    uint16_t velIntGet = ((int) rxFrame.data[2] << 8) | rxFrame.data[3];
+    uint16_t torqueIntGet = ((int) rxFrame.data[4] << 8) | rxFrame.data[5];
 
     feedback.position = uint_to_float(posIntGet, P_MIN, P_MAX, 16);
     feedback.velocity = uint_to_float(velIntGet, V_MIN, V_MAX, 16);
@@ -343,21 +339,19 @@ MotorFeedback read_bytes() {
 
     feedback.isSet = true;
 
-#if VERBOSE
-    // Print parsed data
-    std::cout << "Parsed data:" << std::endl;
-    std::cout << "  Motor ID: " << feedback.canId << std::endl;
-    std::cout << "  Position: " << feedback.position << std::endl;
-    std::cout << "  Velocity: " << feedback.velocity << std::endl;
-    std::cout << "  Torque: " << feedback.torque << std::endl;
-    std::cout << "  Mode: " << feedback.mode << std::endl;
-    std::cout << "  Faults: " << (feedback.faults & 0x01 ? "UnderVolt " : "")
-              << (feedback.faults & 0x02 ? "OverCurrent " : "")
-              << (feedback.faults & 0x04 ? "OverTemp " : "")
-              << (feedback.faults & 0x08 ? "Encoder " : "")
-              << (feedback.faults & 0x10 ? "Hall " : "")
-              << (feedback.faults & 0x20 ? "NoCali" : "") << std::endl;
-#endif
+    //   // Print parsed data
+    //   std::cout << "Parsed data:" << std::endl;
+    //   std::cout << "  Motor ID: " << feedback.canId << std::endl;
+    //   std::cout << "  Position: " << feedback.position << std::endl;
+    //   std::cout << "  Velocity: " << feedback.velocity << std::endl;
+    //   std::cout << "  Torque: " << feedback.torque << std::endl;
+    //   std::cout << "  Mode: " << feedback.mode << std::endl;
+    //   std::cout << "  Faults: " << (feedback.faults & 0x01 ? "UnderVolt " : "")
+    //             << (feedback.faults & 0x02 ? "OverCurrent " : "")
+    //             << (feedback.faults & 0x04 ? "OverTemp " : "")
+    //             << (feedback.faults & 0x08 ? "Encoder " : "")
+    //             << (feedback.faults & 0x10 ? "Hall " : "")
+    //             << (feedback.faults & 0x20 ? "NoCali" : "") << std::endl;
   }
 
   return feedback;
@@ -444,11 +438,11 @@ MotorFeedback send_set_location(uint8_t id, float location) {
 uint16_t float_to_uint(float x, float x_min, float x_max, int bits) {
   float span = x_max - x_min;
   float offset = x_min;
-  return (uint16_t)((x - offset) * ((float)((1 << bits) - 1)) / span);
+  return (uint16_t) ((x - offset) * ((float) ((1 << bits) - 1)) / span);
 }
 
 MotorFeedback send_motor_control(uint8_t id, float posSet, float velSet,
-                                 float kpSet, float kdSet, float torqueSet) {
+  float kpSet, float kdSet, float torqueSet) {
   CanPack pack;
   memset(&pack, 0, sizeof(CanPack));
   pack.exId.id = id;
@@ -494,9 +488,10 @@ int main() {
     return -1;
 
   MotorFeedback feedback;
+  const int num_motors = 5;
 
   // Initialize all motors
-  for (int id : motor_ids) {
+  for (int id = 1; id <= num_motors; ++id) {
     // Set mode to MIT mode
     feedback = send_set_mode(MIT_MODE, id);
     if (feedback.isSet) {
@@ -517,7 +512,7 @@ int main() {
     feedback = send_set_speed_limit(id, 10);
     if (feedback.isSet) {
       std::cout << "Set speed limit feedback received for motor " << id
-                << std::endl;
+        << std::endl;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -529,52 +524,40 @@ int main() {
   // Sine wave control parameters
   const double pi = 3.14159265358979323846;
   const double magnitude = pi / 4;
-  const double period = 1.0;
+  const double period = 2.0;
+  const double duration = 10.0; // Run for 10 seconds
   const double kp = 5.0;
   const double kd = 0.1;
 
-  const int duration = 10.0; // Run for 10 seconds
-
   auto start_time = std::chrono::steady_clock::now();
-  auto last_time = start_time;
-  auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+  auto last_print_time = start_time;
+  auto current_time = start_time;
   int instruction_count = 0;
 
-  while (elapsed_time < std::chrono::seconds(duration)) {
-    auto current_time = std::chrono::steady_clock::now();
-    elapsed_time = current_time - start_time;
-    double elapsed_time_seconds = elapsed_time.count() / 1000000000.0;
+  while ((current_time - start_time) < std::chrono::duration<double>(duration)) {
+    const double elapsed_time = (current_time - start_time).count() / 1e9;
+    const double desired_position =
+      magnitude * std::sin(2 * pi * elapsed_time / period);
 
-    for (int id : motor_ids) {
-      double desired_position =
-          magnitude * std::sin(2 * pi * elapsed_time_seconds / period);
+    for (int id = 1; id <= num_motors; ++id) {
       feedback = send_position_control(id, desired_position, kp);
       instruction_count++;
+    }
 
-#if VERBOSE
-      if (feedback.isSet) {
-        std::cout << "Motor " << id << " - Time: " << std::fixed
-                  << std::setprecision(2) << elapsed_time << "s, "
-                  << "Desired pos: " << std::setprecision(3) << desired_position
-                  << ", Current pos: " << std::setprecision(3)
-                  << feedback.position
-                  << ", Current vel: " << std::setprecision(3)
-                  << feedback.velocity << std::endl;
-      }
-#endif
+    // Log frequency every second
+    if ((current_time - last_print_time) > std::chrono::duration<double>(1)) {
+      last_print_time = current_time;
+      double frequency = instruction_count / elapsed_time;
+      std::cout << "Instructions per second: " << std::fixed
+        << std::setprecision(2) << frequency << " Hz" << std::endl;
     }
 
     // Update elapsed time
-    if ((current_time - last_time) > std::chrono::seconds(1)) {
-      last_time = current_time;
-      double frequency = instruction_count / elapsed_time_seconds;
-      std::cout << "Instructions per second: " << std::fixed
-                << std::setprecision(2) << frequency << " Hz" << std::endl;
-    }
+    current_time = std::chrono::steady_clock::now();
   }
 
   // Reset all motors after the loop
-  for (int id : motor_ids) {
+  for (int id = 1; id <= num_motors; ++id) {
     feedback = send_reset(id);
     if (feedback.isSet) {
       std::cout << "Reset feedback received for motor " << id << std::endl;
@@ -584,6 +567,9 @@ int main() {
   // Close the serial port when done
   std::cout << "Closing serial port" << std::endl;
   close(my_serialport);
+
+  // Close the log file
+  logFile.close();
 
   std::cout << "Program finished" << std::endl;
   return 0;
