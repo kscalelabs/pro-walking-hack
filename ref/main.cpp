@@ -18,6 +18,7 @@
 #define CAN_ID_DEBUG_UI (0XFD)  // Debug address - Upper computer address
 
 #define BAUDRATE 921600
+#define VERBOSE 0
 
 #if __linux__
 // #define TTY_PORT "/dev/ttyCH341USB0"
@@ -28,7 +29,7 @@
 #error "Unsupported platform"
 #endif
 
-#define MOTOR_TYPE 3
+#define MOTOR_TYPE 1
 
 #if MOTOR_TYPE == 1
 
@@ -74,6 +75,8 @@
 #error "Unsupported motor type"
 
 #endif
+
+const int motor_ids[] = {2};
 
 enum canComMode {
   CANCOM_ANNOUNCE_DEVID = 0,
@@ -174,13 +177,15 @@ void txdPack(CanPack *pack) {
   Pack[7 + pack->len] = '\r';
   Pack[8 + pack->len] = '\n';
 
-  // Print the full string of bits being sent
+// Print the full string of bits being sent
+#if VERBOSE
   std::cout << "tx ";
   for (size_t i = 0; i < Pack.size(); ++i) {
     std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)Pack[i]
               << " ";
   }
   std::cout << std::dec << std::endl;
+#endif
 
   // Write the data
   ssize_t bytes_written =
@@ -299,12 +304,14 @@ MotorFeedback read_bytes() {
     return feedback;
   }
 
+#if VERBOSE
   std::cout << "rx ";
   for (ssize_t i = 0; i < bytes_read; i++) {
     std::cout << std::hex << std::setw(2) << std::setfill('0')
               << (int)(unsigned char)buffer[i] << ' ' << std::dec;
   }
   std::cout << std::endl;
+#endif
 
   if (bytes_read == 17 && buffer[0] == 'A' && buffer[1] == 'T') {
     CanPack rxFrame;
@@ -336,6 +343,7 @@ MotorFeedback read_bytes() {
 
     feedback.isSet = true;
 
+#if VERBOSE
     // Print parsed data
     std::cout << "Parsed data:" << std::endl;
     std::cout << "  Motor ID: " << feedback.canId << std::endl;
@@ -349,6 +357,7 @@ MotorFeedback read_bytes() {
               << (feedback.faults & 0x08 ? "Encoder " : "")
               << (feedback.faults & 0x10 ? "Hall " : "")
               << (feedback.faults & 0x20 ? "NoCali" : "") << std::endl;
+#endif
   }
 
   return feedback;
@@ -485,10 +494,9 @@ int main() {
     return -1;
 
   MotorFeedback feedback;
-  const int num_motors = 5;
 
   // Initialize all motors
-  for (int id = 1; id <= num_motors; ++id) {
+  for (int id : motor_ids) {
     // Set mode to MIT mode
     feedback = send_set_mode(MIT_MODE, id);
     if (feedback.isSet) {
@@ -521,56 +529,52 @@ int main() {
   // Sine wave control parameters
   const double pi = 3.14159265358979323846;
   const double magnitude = pi / 4;
-  const double period = 2.0;
-  const double duration = 10.0; // Run for 10 seconds
+  const double period = 1.0;
   const double kp = 5.0;
   const double kd = 0.1;
 
+  const int duration = 10.0; // Run for 10 seconds
+
   auto start_time = std::chrono::steady_clock::now();
-  double elapsed_time = 0.0;
+  auto last_time = start_time;
+  auto elapsed_time = std::chrono::steady_clock::now() - start_time;
   int instruction_count = 0;
 
-  std::vector<double> desired_positions(num_motors);
-  std::vector<double> desired_velocities(num_motors);
+  while (elapsed_time < std::chrono::seconds(duration)) {
+    auto current_time = std::chrono::steady_clock::now();
+    elapsed_time = current_time - start_time;
+    double elapsed_time_seconds = elapsed_time.count() / 1000000000.0;
 
-  while (elapsed_time < duration) {
-    for (int id = 1; id <= num_motors; ++id) {
-      double phase_offset =
-          2 * pi * (id - 1) / num_motors; // Offset each motor's phase
-      desired_positions[id - 1] =
-          magnitude * std::sin(2 * pi * elapsed_time / period + phase_offset);
-
-      // Send position control command
-      feedback = send_position_control(id, desired_positions[id - 1], kp);
+    for (int id : motor_ids) {
+      double desired_position =
+          magnitude * std::sin(2 * pi * elapsed_time_seconds / period);
+      feedback = send_position_control(id, desired_position, kp);
       instruction_count++;
 
+#if VERBOSE
       if (feedback.isSet) {
         std::cout << "Motor " << id << " - Time: " << std::fixed
                   << std::setprecision(2) << elapsed_time << "s, "
-                  << "Desired pos: " << std::setprecision(3)
-                  << desired_positions[id - 1]
+                  << "Desired pos: " << std::setprecision(3) << desired_position
                   << ", Current pos: " << std::setprecision(3)
                   << feedback.position
                   << ", Current vel: " << std::setprecision(3)
                   << feedback.velocity << std::endl;
       }
+#endif
     }
 
     // Update elapsed time
-    auto current_time = std::chrono::steady_clock::now();
-    elapsed_time =
-        std::chrono::duration<double>(current_time - start_time).count();
-
-    // Log frequency every second
-    if (int(elapsed_time) > int(elapsed_time - 0.1)) {
-      double frequency = instruction_count / elapsed_time;
+    if ((current_time - last_time) > std::chrono::seconds(1)) {
+      last_time = current_time;
+      double frequency = instruction_count / elapsed_time_seconds;
       std::cout << "Instructions per second: " << std::fixed
                 << std::setprecision(2) << frequency << " Hz" << std::endl;
     }
   }
 
   // Reset all motors after the loop
-  for (int id = 1; id <= num_motors; ++id) {
+  for (int id : motor_ids) {
     feedback = send_reset(id);
     if (feedback.isSet) {
       std::cout << "Reset feedback received for motor " << id << std::endl;
