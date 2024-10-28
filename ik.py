@@ -6,7 +6,7 @@ import time
 import numpy as np
 import pybullet as p
 import pybullet_data
-from actuator import RobstrideMotorsSupervisor
+# from actuator import RobstrideMotorsSupervisor
 from inputs import get_gamepad
 
 EEL_JOINT = "left_end_effector_joint"
@@ -51,29 +51,29 @@ eel_chain = [
     "L_elbow_x",
 ]
 
-def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
-    motor_config = {
-        1: "04",
-        2: "04",
-        3: "04",
-        4: "04",
-    }
+# def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
+#     motor_config = {
+#         1: "04",
+#         2: "04",
+#         3: "04",
+#         4: "04",
+#     }
 
-    left_port = "/dev/ttyCH341USB0"
-    right_port = "/dev/ttyCH341USB1"
+#     left_port = "/dev/ttyCH341USB0"
+#     right_port = "/dev/ttyCH341USB1"
 
-    left_arm = RobstrideMotorsSupervisor(
-        port_name=left_port,
-        motor_infos=motor_config,
-        target_update_rate=10000.0,
-    )
-    right_arm = RobstrideMotorsSupervisor(
-        port_name=right_port,
-        motor_infos=motor_config,
-        target_update_rate=10000.0,
-    )
+#     left_arm = RobstrideMotorsSupervisor(
+#         port_name=left_port,
+#         motor_infos=motor_config,
+#         target_update_rate=10000.0,
+#     )
+#     right_arm = RobstrideMotorsSupervisor(
+#         port_name=right_port,
+#         motor_infos=motor_config,
+#         target_update_rate=10000.0,
+#     )
 
-    return left_arm, right_arm
+#     return left_arm, right_arm
 
 def inverse_kinematics(arm: str, goal_pos: np.ndarray) -> np.ndarray:
     """Performs inverse kinematics for the given arm."""
