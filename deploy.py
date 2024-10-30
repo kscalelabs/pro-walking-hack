@@ -10,31 +10,59 @@ import onnxruntime as ort
 from actuator import RobstrideMotorFeedback, RobstrideMotorsSupervisor
 from imu import HexmoveImuReader
 
+# PD_CONSTANTS = {
+#     1: {
+#         "name": "hip_y",
+#         "p": 300,
+#         "d": 9,
+#     },
+#     2: {
+#         "name": "hip_x",
+#         "p": 240,
+#         "d": 4,
+#     },
+#     3: {
+#         "name": "hip_z",
+#         "p": 200,
+#         "d": 10,
+#     },
+#     4: {
+#         "name": "knee",
+#         "p": 270,
+#         "d": 9,
+#     },
+#     5: {
+#         "name": "ankle_y",
+#         "p": 300,
+#         "d": 9,
+#     },
+# }
+
 PD_CONSTANTS = {
     1: {
         "name": "hip_y",
-        "p": 300,
-        "d": 9,
+        "p": 40,
+        "d": 1,
     },
     2: {
         "name": "hip_x",
-        "p": 240,
-        "d": 4,
+        "p": 40,
+        "d": 1,
     },
     3: {
         "name": "hip_z",
-        "p": 200,
-        "d": 10,
+        "p": 40,
+        "d": 1,
     },
     4: {
         "name": "knee",
-        "p": 270,
-        "d": 9,
+        "p": 40,
+        "d": 1,
     },
     5: {
         "name": "ankle_y",
-        "p": 300,
-        "d": 9,
+        "p": 40,
+        "d": 1,
     },
 }
 
@@ -99,7 +127,7 @@ def run_onnx_model() -> None:
         2: "03",
         3: "03",
         4: "04",
-        5: "01",
+        5: "02",
     }
 
     # Initialize CAN-based IMU
@@ -225,6 +253,9 @@ def run_onnx_model() -> None:
 
     start_time = time.time()
     target_cycle_time = 1 / 50  # 50 Hz cycle rate
+
+    actions = np.zeros(10, dtype=np.double)
+    buffer = np.zeros(574, dtype=np.double)
     while True:
         cycle_start_time = time.time()
         elapsed_time = cycle_start_time - start_time
@@ -238,10 +269,10 @@ def run_onnx_model() -> None:
         input_data["imu_ang_vel.1"] = get_angular_velocity().astype(np.float32)
         input_data["imu_euler_xyz.1"] = get_euler_angles().astype(np.float32)
 
-        positions, actions, buffer = session.run(None, input_data)
-
         input_data["prev_actions.1"] = actions
         input_data["buffer.1"] = buffer
+
+        positions, actions, buffer = session.run(None, input_data)
 
         if np.any(positions > 0.1) or np.any(positions < -0.1):
             print(f"Positions out of bounds: {positions}")

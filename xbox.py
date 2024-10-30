@@ -11,23 +11,35 @@ from actuator import RobstrideMotorsSupervisor
 pygame.init()
 pygame.joystick.init()
 
+leg_config = {
+    1 : "04",
+    2 : "03",
+    3 : "03",
+    4 : "04",
+    5 : "02",
+}
+
+arm_config = {
+    1 : "03",
+    2 : "03",
+    3 : "02",
+    4 : "02",
+    5 : "02",
+    6 : "00",
+}
+
 PORT_NAMES = {
-    # Left leg.
-    "/dev/ttyUSB0": {
-        1: "04",
-        2: "03",
-        3: "03",
-        4: "03",
-        5: "01",
-    },
     # Right leg.
-    "/dev/ttyUSB1": {
-        1: "04",
-        2: "03",
-        3: "03",
-        4: "03",
-        # 5: "01",
-    },
+    # "/dev/ttyCH341USB0": leg_config,
+    "/dev/ttyCH341USB1" : arm_config,
+    # # Right leg.
+    # "/dev/ttyUSB1": {
+    #     1: "04",
+    #     2: "03",
+    #     3: "03",
+    #     4: "03",
+    #     # 5: "01",
+    # },
 }
 
 DELTA_POSITION = 0.5  # radians / second
@@ -36,7 +48,7 @@ DELTA_POSITION_BIG_MUL = 6.0
 DELTA_VELOCITY = 0.5  # radians / second ^ 2
 DELTA_VELOCITY_BIG_MUL = 6.0
 
-DELTA_KP = 0.1
+DELTA_KP = 0.5
 DELTA_KP_BIG = 10.0
 
 DELTA_KD = 0.01
