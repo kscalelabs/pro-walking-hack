@@ -3,6 +3,7 @@
 # Interfacing with sensors.
 actuator
 berryimu
+kscale-imu
 
 # Logitech F310 gamepad.
 inputs
