@@ -4,7 +4,6 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-import can
 import numpy as np
 import onnxruntime as ort
 from actuator import RobstrideMotorFeedback, RobstrideMotorsSupervisor
@@ -13,58 +12,60 @@ from imu import HexmoveImuReader
 # PD_CONSTANTS = {
 #     1: {
 #         "name": "hip_y",
-#         "p": 300,
-#         "d": 9,
+#         "p": 300.0,
+#         "d": 10.0,
 #     },
 #     2: {
-#         "name": "hip_x",
-#         "p": 240,
-#         "d": 4,
+#         "name": "hip_x", 
+#         "p": 200.0,
+#         "d": 10.0,
 #     },
 #     3: {
 #         "name": "hip_z",
-#         "p": 200,
-#         "d": 10,
+#         "p": 200.0,
+#         "d": 10.0,
 #     },
 #     4: {
 #         "name": "knee",
-#         "p": 270,
-#         "d": 9,
+#         "p": 300.0,
+#         "d": 10.0,
 #     },
 #     5: {
 #         "name": "ankle_y",
-#         "p": 300,
-#         "d": 9,
+#         "p": 300.0,
+#         "d": 10.0,
 #     },
 # }
 
 PD_CONSTANTS = {
     1: {
         "name": "hip_y",
-        "p": 40,
-        "d": 1,
+        "p": 100.0,
+        "d": 15.0,
     },
     2: {
         "name": "hip_x",
-        "p": 40,
-        "d": 1,
+        "p": 80.0,
+        "d": 15.0,
     },
     3: {
         "name": "hip_z",
-        "p": 40,
-        "d": 1,
+        "p": 80.0,
+        "d": 15.0,
     },
     4: {
         "name": "knee",
-        "p": 40,
-        "d": 1,
+        "p": 100.0,
+        "d": 15.0,
     },
     5: {
         "name": "ankle_y",
-        "p": 40,
-        "d": 1,
+        "p": 50.0,
+        "d": 15.0,
     },
 }
+
+MOTOR_STARTUP_SAFETY_BUFFER = 1.5
 
 @dataclass
 class JointData:
@@ -119,7 +120,7 @@ class RobotData:
 
 
 def run_onnx_model() -> None:
-    session = ort.InferenceSession("standing.onnx")
+    session = ort.InferenceSession("walking_pro.onnx")
 
     # Initialize the motors.
     leg_motor_infos = {
@@ -147,18 +148,72 @@ def run_onnx_model() -> None:
     # IMU offset
     angular_offset = np.array([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle])
 
-    left_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB0", motor_infos=leg_motor_infos,
+    left_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB1", motor_infos=leg_motor_infos,
                                         target_update_rate=10000.0)
 
-    right_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB1", motor_infos=leg_motor_infos,
+    right_leg = RobstrideMotorsSupervisor(port_name="/dev/ttyCH341USB0", motor_infos=leg_motor_infos,
                                          target_update_rate=10000.0)
 
     robot_data = RobotData()
 
-    for i in range(5):
-        left_leg.add_motor_to_zero(i + 1)
-        right_leg.add_motor_to_zero(i + 1)
+    # Reference offsets for standing
+    standing_offset = RobotData()
+
+    # # Leg 1 (Values from robstride)
+    # standing_offset.right_leg.hip_y.position = 1.57
+    # standing_offset.right_leg.hip_x.position = 0.384
+    # standing_offset.right_leg.hip_z.position = 1.57
+    # standing_offset.right_leg.knee.position = 2.17 
+    # standing_offset.right_leg.ankle_y.position = 0.7
+
+    # # Leg 2
+    # standing_offset.left_leg.hip_y.position = 4.71
+    # standing_offset.left_leg.hip_x.position = 5.896
+    # standing_offset.left_leg.hip_z.position = 4.71
+    # standing_offset.left_leg.knee.position = 4.11
+    # standing_offset.left_leg.ankle_y.position = 5.58
+    knee_offset = -0.3
+    hip_y_offset = -0.2
+    # Leg 1
+    standing_offset.right_leg.hip_y.position = 1.57 + hip_y_offset
+    standing_offset.right_leg.hip_x.position = 0.384
+    standing_offset.right_leg.hip_z.position = 1.57
+    standing_offset.right_leg.knee.position = 2.17 + knee_offset
+    standing_offset.right_leg.ankle_y.position = 0.7
+
+    # Leg 2
+    standing_offset.left_leg.hip_y.position = 4.71 - hip_y_offset
+    standing_offset.left_leg.hip_x.position = 5.896
+    standing_offset.left_leg.hip_z.position = 4.71
+    standing_offset.left_leg.knee.position = 4.11 - knee_offset
+    standing_offset.left_leg.ankle_y.position = 5.58
+
+    # for i in range(5):
+    #     left_leg.add_motor_to_zero(i + 1)
+    #     right_leg.add_motor_to_zero(i + 1)
+    #     time.sleep(0.01)
+    time.sleep(1)
+    left_positions = left_leg.get_latest_feedback()
+    right_positions = right_leg.get_latest_feedback()
+
+    print(f"Left positions: {left_positions}")
+    print(f"Right positions: {right_positions}")
+
+    for motor_id, _ in leg_motor_infos.items():
+        assert left_positions[motor_id].position > MOTOR_STARTUP_SAFETY_BUFFER # leg 2
+        assert right_positions[motor_id].position < 2*np.pi - MOTOR_STARTUP_SAFETY_BUFFER # leg 1
         time.sleep(0.01)
+
+    # VERY IMPORTANT TO DO THIS
+    for id, feedback in left_positions.items():
+        left_leg.set_position(id, feedback.position)
+        time.sleep(0.01)
+
+    for id, feedback in right_positions.items():
+        right_leg.set_position(id, feedback.position)
+        time.sleep(0.01)
+    
+    time.sleep(0.5)
 
     for motor_id, motor_info in PD_CONSTANTS.items():
         assert isinstance(motor_info["p"], float)
@@ -185,7 +240,7 @@ def run_onnx_model() -> None:
         "buffer.1": np.zeros(574, dtype=np.float32),
     }
 
-    command = {"x_vel": 0.0,
+    command = {"x_vel": 0.4,
                "y_vel": 0.0,
                "rot": 0.0,}
 
@@ -194,9 +249,11 @@ def run_onnx_model() -> None:
     input_data["rot.1"][0] = np.float32(command["rot"])
 
     def get_angular_velocity() -> np.ndarray:
-        return np.array([imu_data.x_velocity, imu_data.y_velocity, imu_data.z_velocity])
+        # return np.array([imu_data.x_velocity, imu_data.y_velocity, imu_data.z_velocity])
+        return np.zeros(3, dtype=np.float32)
 
     def get_euler_angles() -> np.ndarray:
+        # Roll, pitch, yaw
         return np.deg2rad([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle] - angular_offset) * euler_signs
 
     def update_motor_data() -> None:
@@ -215,7 +272,7 @@ def run_onnx_model() -> None:
             print(f"Right leg feedback length is not 5: {len(right_leg_feedback)}")
 
     def get_joint_angles() -> np.ndarray:
-        return np.array([
+        real_joints = np.array([
             robot_data.left_leg.hip_y.position,
             robot_data.left_leg.hip_x.position,
             robot_data.left_leg.hip_z.position,
@@ -228,8 +285,23 @@ def run_onnx_model() -> None:
             robot_data.right_leg.ankle_y.position,
         ])
 
+        offset_array = np.array([
+            standing_offset.left_leg.hip_y.position,
+            standing_offset.left_leg.hip_x.position,
+            standing_offset.left_leg.hip_z.position,
+            standing_offset.left_leg.knee.position,
+            standing_offset.left_leg.ankle_y.position,
+            standing_offset.right_leg.hip_y.position,
+            standing_offset.right_leg.hip_x.position,
+            standing_offset.right_leg.hip_z.position,
+            standing_offset.right_leg.knee.position,
+            standing_offset.right_leg.ankle_y.position,
+        ])
+
+        return (real_joints - offset_array) * -1
+
     def get_joint_velocities() -> np.ndarray:
-        return np.array([
+        real_joints = np.array([
             robot_data.left_leg.hip_y.velocity,
             robot_data.left_leg.hip_x.velocity,
             robot_data.left_leg.hip_z.velocity,
@@ -242,43 +314,101 @@ def run_onnx_model() -> None:
             robot_data.right_leg.ankle_y.velocity,
         ])
 
-    def send_positions(positions: np.ndarray) -> None:
-        for motor_id, angle in enumerate(positions[:5]):
-            left_leg.set_position(motor_id + 1, angle)
-            time.sleep(0.01)
+        return (real_joints) * -1
 
-        for motor_id, angle in enumerate(positions[5:]):
-            right_leg.set_position(motor_id + 1, angle)
-            time.sleep(0.01)
+    def send_positions(positions: np.ndarray) -> None:
+
+        MAX_DELTA_POSITION = 0.5
+
+        left_leg_feedback = left_leg.get_latest_feedback()
+        right_leg_feedback = right_leg.get_latest_feedback()
+
+        offset_array = np.array([
+            standing_offset.left_leg.hip_y.position,
+            standing_offset.left_leg.hip_x.position,
+            standing_offset.left_leg.hip_z.position,
+            standing_offset.left_leg.knee.position,
+            standing_offset.left_leg.ankle_y.position,
+        ])
+        for motor_id, angle in enumerate(positions[:5] + offset_array[:5]):
+            if abs(left_leg_feedback[motor_id + 1].position - angle) < MAX_DELTA_POSITION:
+                left_leg.set_position(motor_id + 1, angle)
+                # time.sleep(0.01)
+            else:
+                print(f"Left leg motor {motor_id + 1} is too far from target position: {left_leg_feedback[motor_id + 1].position} -> {angle}")
+        
+        offset_array = np.array([
+            standing_offset.right_leg.hip_y.position,
+            standing_offset.right_leg.hip_x.position,
+            standing_offset.right_leg.hip_z.position,
+            standing_offset.right_leg.knee.position,
+            standing_offset.right_leg.ankle_y.position,
+        ])
+        for motor_id, angle in enumerate(positions[5:] + offset_array[:5]):
+            if abs(right_leg_feedback[motor_id + 1].position - angle) < MAX_DELTA_POSITION:
+                right_leg.set_position(motor_id + 1, angle)
+                # time.sleep(0.01)
+            else:
+                print(f"Right leg motor {motor_id + 1} is too far from target position: {right_leg_feedback[motor_id + 1].position} -> {angle}")
 
     start_time = time.time()
-    target_cycle_time = 1 / 50  # 50 Hz cycle rate
+    target_cycle_time = 1.0 / 50.0  # 50 Hz cycle rate
 
-    actions = np.zeros(10, dtype=np.double)
-    buffer = np.zeros(574, dtype=np.double)
+    actions = np.zeros(10, dtype=np.float32)
+    buffer = np.zeros(615, dtype=np.float32)
+
+    left_ref = [
+        standing_offset.left_leg.hip_y.position,
+        standing_offset.left_leg.hip_x.position,
+        standing_offset.left_leg.hip_z.position,
+        standing_offset.left_leg.knee.position,
+        standing_offset.left_leg.ankle_y.position,
+    ]
+
+    right_ref = [
+        standing_offset.right_leg.hip_y.position,
+        standing_offset.right_leg.hip_x.position,
+        standing_offset.right_leg.hip_z.position,
+        standing_offset.right_leg.knee.position,
+        standing_offset.right_leg.ankle_y.position,
+    ]
+
+    # while True:
+    #     for motor_id in [1, 2, 3, 4, 5]:
+    #         left_leg.set_position(motor_id, left_ref[motor_id - 1])
+    #         right_leg.set_position(motor_id, right_ref[motor_id - 1])
+    #         # print(f"Trying to set left leg motor {motor_id} to {left_ref[motor_id - 1]}")
+    #         # print(f"Trying to set right leg motor {motor_id} to {right_ref[motor_id - 1]}")
+    #         time.sleep(0.01)
+    #     time.sleep(0.5)
+    
+    # exit()
+
     while True:
         cycle_start_time = time.time()
         elapsed_time = cycle_start_time - start_time
 
         update_motor_data()
-        imu_data = imu_reader.get_data()
+        # imu_data = imu_reader.get_data()
 
-        input_data["t.1"][0] = np.float32(elapsed_time)
+        input_data["t.1"][0] = np.float32(elapsed_time).astype(np.float32)
         input_data["dof_pos.1"] = get_joint_angles().astype(np.float32)
         input_data["dof_vel.1"] = get_joint_velocities().astype(np.float32)
         input_data["imu_ang_vel.1"] = get_angular_velocity().astype(np.float32)
         input_data["imu_euler_xyz.1"] = get_euler_angles().astype(np.float32)
 
-        input_data["prev_actions.1"] = actions
-        input_data["buffer.1"] = buffer
+        input_data["prev_actions.1"] = actions.astype(np.float32)
+        input_data["buffer.1"] = buffer.astype(np.float32)
 
         positions, actions, buffer = session.run(None, input_data)
 
-        if np.any(positions > 0.1) or np.any(positions < -0.1):
-            print(f"Positions out of bounds: {positions}")
-            positions = np.clip(positions, -0.1, 0.1) 
-            print(f"Dof_pos: {input_data['dof_pos.1']}")
+        positions = -1 * positions
 
+        if np.any(positions > 0.8) or np.any(positions < -0.8):
+            print(f"Positions out of bounds: {positions}")
+            positions = np.clip(positions, -0.8, 0.8) 
+            print(f"Dof_pos: {input_data['dof_pos.1']}")
+        
         send_positions(positions)
 
         cycle_end_time = time.time()
