@@ -139,7 +139,7 @@ def run_onnx_model() -> None:
     imu_reader = HexmoveImuReader("can0", 1, 1)
 
     # Converting from real to sim
-    euler_signs = np.array([-1, -1, -1])
+    euler_signs = np.array([1, 1, 1])
 
     time.sleep(1)
 
@@ -208,35 +208,18 @@ def run_onnx_model() -> None:
     print(f"Right positions: {right_positions}")
 
     for motor_id, _ in leg_motor_infos.items():
-        # Check if starting positions are valid and raise an error if not
         assert left_positions[motor_id].position > MOTOR_STARTUP_SAFETY_BUFFER # leg 2
         assert right_positions[motor_id].position < 2*np.pi - MOTOR_STARTUP_SAFETY_BUFFER # leg 1
-        # if left_positions[motor_id].position < MOTOR_STARTUP_SAFETY_BUFFER: # leg 2
-        #     raise RuntimeError(f"Left leg motor {motor_id} is too close to zero: {left_positions[motor_id].position}")
-        
-        # if right_positions[motor_id].position > 2*np.pi - MOTOR_STARTUP_SAFETY_BUFFER: # leg 1
-        #     raise RuntimeError(f"Right leg motor {motor_id} is too close to zero: {right_positions[motor_id].position}")    
         time.sleep(0.01)
 
-    
     # VERY IMPORTANT TO DO THIS
     for id, feedback in left_positions.items():
-        if feedback.mode == "Motor":
-            if feedback.position > 10:
-                print("ERROR")
-                exit()
-            left_leg.set_position(id, feedback.position)
-            time.sleep(0.01)
-        else:
-            raise RuntimeError(f"Left leg motor {id} is not in Motor mode: {feedback}")
+        left_leg.set_position(id, feedback.position)
+        time.sleep(0.01)
 
     for id, feedback in right_positions.items():
-        if feedback.mode == "Motor":
-            right_leg.set_position(id, feedback.position)
-            time.sleep(0.01)
-        else:
-            print(f"Right leg motor {id} is not in Motor mode: {feedback}")
-            raise RuntimeError(f"Right leg motor {id} is not in Motor mode: {feedback}")
+        right_leg.set_position(id, feedback.position)
+        time.sleep(0.01)
     
     time.sleep(0.5)
 
@@ -274,7 +257,7 @@ def run_onnx_model() -> None:
     input_data["rot.1"][0] = np.float32(command["rot"])
 
     def get_angular_velocity() -> np.ndarray:
-        # return np.array([imu_data.x_velocity, imu_data.y_velocity, imu_data.z_velocity]) * euler_signs
+        # return np.array([imu_data.x_velocity, imu_data.y_velocity, imu_data.z_velocity])
         return np.zeros(3, dtype=np.float32)
 
     def get_euler_angles() -> np.ndarray:
@@ -282,7 +265,6 @@ def run_onnx_model() -> None:
         angles =  np.deg2rad([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle] - angular_offset) * euler_signs
         angles[angles > np.pi] -= 2 * np.pi
         angles[angles < -np.pi] += 2 * np.pi
-        return np.zeros(3, dtype=np.float32)
         return angles
 
 
@@ -348,7 +330,7 @@ def run_onnx_model() -> None:
 
     def send_positions(positions: np.ndarray) -> None:
 
-        MAX_DELTA_POSITION = 0.5
+        MAX_DELTA_POSITION = 0.75
 
         left_leg_feedback = left_leg.get_latest_feedback()
         right_leg_feedback = right_leg.get_latest_feedback()
@@ -363,6 +345,7 @@ def run_onnx_model() -> None:
         for motor_id, angle in enumerate(positions[:5] + offset_array[:5]):
             if abs(left_leg_feedback[motor_id + 1].position - angle) < MAX_DELTA_POSITION:
                 left_leg.set_position(motor_id + 1, angle)
+                # time.sleep(0.01)
             else:
                 print(f"Left leg motor {motor_id + 1} is too far from target position: {left_leg_feedback[motor_id + 1].position} -> {angle}")
         
@@ -373,10 +356,10 @@ def run_onnx_model() -> None:
             standing_offset.right_leg.knee.position,
             standing_offset.right_leg.ankle_y.position,
         ])
-
         for motor_id, angle in enumerate(positions[5:] + offset_array[:5]):
             if abs(right_leg_feedback[motor_id + 1].position - angle) < MAX_DELTA_POSITION:
                 right_leg.set_position(motor_id + 1, angle)
+                # time.sleep(0.01)
             else:
                 print(f"Right leg motor {motor_id + 1} is too far from target position: {right_leg_feedback[motor_id + 1].position} -> {angle}")
 
@@ -410,49 +393,50 @@ def run_onnx_model() -> None:
     #         # print(f"Trying to set right leg motor {motor_id} to {right_ref[motor_id - 1]}")
     #         time.sleep(0.01)
     #     time.sleep(0.5)
-    
+    #     
     # exit()
 
-    while True:
-        cycle_start_time = time.time()
-        elapsed_time = cycle_start_time - start_time
+    # Open a file to log the imu_ang_euler data
+    with open("imu_ang_euler_log.txt", "w") as log_file:
+        while True:
+            cycle_start_time = time.time()
+            elapsed_time = cycle_start_time - start_time
 
-        update_motor_data()
-        imu_data = imu_reader.get_data()
+            update_motor_data()
+            imu_data = imu_reader.get_data()
 
-        input_data["t.1"][0] = np.float32(elapsed_time).astype(np.float32)
-        input_data["dof_pos.1"] = get_joint_angles().astype(np.float32)
-        input_data["dof_vel.1"] = get_joint_velocities().astype(np.float32)
-        input_data["imu_ang_vel.1"] = get_angular_velocity().astype(np.float32)
-        input_data["imu_euler_xyz.1"] = get_euler_angles().astype(np.float32)
+            input_data["t.1"][0] = np.float32(elapsed_time).astype(np.float32)
+            input_data["dof_pos.1"] = get_joint_angles().astype(np.float32)
+            input_data["dof_vel.1"] = get_joint_velocities().astype(np.float32)
+            input_data["imu_ang_vel.1"] = get_angular_velocity().astype(np.float32)
+            input_data["imu_euler_xyz.1"] = get_euler_angles().astype(np.float32)
 
-        input_data["prev_actions.1"] = actions.astype(np.float32)
-        input_data["buffer.1"] = buffer.astype(np.float32)
+            input_data["prev_actions.1"] = actions.astype(np.float32)
+            input_data["buffer.1"] = buffer.astype(np.float32)
 
-        positions, actions, buffer = session.run(None, input_data)
+            positions, actions, buffer = session.run(None, input_data)
 
-        positions = -1 * positions
+            positions = -1 * positions
 
-        if np.any(positions > 0.5) or np.any(positions < -0.5):
-            print(f"Positions out of bounds: {positions}")
-            positions = np.clip(positions, -0.5, 0.5) 
-            print(f"Dof_pos: {input_data['dof_pos.1']}")
-#         print(positions)
-#         positions = np.zeros(10, dtype=np.float32) - 0.1
-#         positions = np.array([-0.07445415,  0.03433557, -0.03165408,  0.03360979, -0.13386671,  0.14077598,
-#   0.08295336,  0.00957936,  0.11282689, -0.1593551 ])
-        send_positions(positions)
-        # print(robot_data)
-        # print(f"imu_ang_euler: {input_data['imu_euler_xyz.1']}")
+            if np.any(positions > 0.8) or np.any(positions < -0.8):
+                print(f"Positions out of bounds: {positions}")
+                positions = np.clip(positions, -0.8, 0.8) 
+                print(f"Dof_pos: {input_data['dof_pos.1']}")
+            
+            # send_positions(positions)
 
-        cycle_end_time = time.time()
-        cycle_duration = cycle_end_time - cycle_start_time
-        sleep_time = max(0, target_cycle_time - cycle_duration)
-        time.sleep(sleep_time)
-        # print(f"Slept for {sleep_time:.6f} seconds to maintain 50 Hz cycle rate")
+            imu_euler_data = input_data['imu_euler_xyz.1']
+            print(f"imu_ang_euler: {imu_euler_data}")
+
+            # Log the imu_ang_euler data to the file in CSV format
+            log_file.write(f"{imu_euler_data[0]},{imu_euler_data[1]},{imu_euler_data[2]}\n")
+
+            cycle_end_time = time.time()
+            cycle_duration = cycle_end_time - cycle_start_time
+            sleep_time = max(0, target_cycle_time - cycle_duration)
+            time.sleep(sleep_time)
+            # print(f"Slept for {sleep_time:.6f} seconds to maintain 50 Hz cycle rate")
 
 if __name__ == "__main__":
     # python deploy.py
     run_onnx_model()
-
-
