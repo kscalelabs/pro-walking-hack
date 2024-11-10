@@ -9,19 +9,19 @@ from inputs import get_gamepad
 
 PORT_NAMES = {
     # Left leg.
-    "/dev/ttyUSB0": {
-        1: "04",
+    "/dev/ttyCH341USB0": {
+        1: "03",
         2: "03",
-        3: "03",
-        4: "03",
+        3: "01",
+        4: "01",
         5: "01",
     },
     # Right leg.
-    "/dev/ttyUSB1": {
-        1: "04",
+    "/dev/ttyCH341USB1": {
+        1: "03",
         2: "03",
-        3: "03",
-        4: "03",
+        3: "01",
+        4: "01",
         5: "01",
     },
 }
@@ -161,15 +161,15 @@ def main() -> None:
 
             active_motor, port_name, motor_id = all_motors[active_motor_index]
 
-            if current_time - log_last_time > 1.0:
-                log_last_time = current_time
-                failed_commands = active_motor.get_failed_commands(motor_id)
-                total_commands = active_motor.get_total_commands(motor_id)
-                update_rate = active_motor.get_actual_update_rate()
-                print(
-                    f"{GREY}Failed commands: {failed_commands}/{total_commands} - "
-                    f"Update rate: {update_rate:.2f} Hz{RESET}"
-                )
+            # if current_time - log_last_time > 1.0:
+            #     log_last_time = current_time
+            #     failed_commands = active_motor.get_failed_commands(motor_id)
+            #     total_commands = active_motor.get_total_commands(motor_id)
+            #     update_rate = active_motor.get_actual_update_rate()
+            #     print(
+            #         f"{GREY}Failed commands: {failed_commands}/{total_commands} - "
+            #         f"Update rate: {update_rate:.2f} Hz{RESET}"
+            #     )
 
             # Zero the active motor.
             if shared_state.red_button_pressed:

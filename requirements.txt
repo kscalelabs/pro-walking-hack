@@ -10,6 +10,8 @@ inputs
 # IK
 pybullet==3.2.6
 
+numpy==2.1.3
+
 # Running the model.
 torch
 onnx

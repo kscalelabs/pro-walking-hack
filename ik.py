@@ -1,16 +1,21 @@
 """Simple ik script for Stompy Pro."""
 import argparse
+from dataclasses import dataclass
 import platform
+import threading
 import time
 
 import numpy as np
 import pybullet as p
 import pybullet_data
-# from actuator import RobstrideMotorsSupervisor
+from actuator import RobstrideMotorsSupervisor
 from inputs import get_gamepad
 
 EEL_JOINT = "left_end_effector_joint"
 EER_JOINT = "right_end_effector_joint"
+
+ROBOT_HEIGHT = 1.0
+ROBOT_WIDTH = 0.5
 
 MAX_JOINT_DELTA = 0.5 # radians
 
@@ -51,29 +56,55 @@ eel_chain = [
     "L_elbow_x",
 ]
 
-# def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
-#     motor_config = {
-#         1: "04",
-#         2: "04",
-#         3: "04",
-#         4: "04",
-#     }
+def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
+    motor_config = {
+        1: "03",
+        2: "03",
+        3: "01",
+        4: "01",
+        5: "01",
+    }
 
-#     left_port = "/dev/ttyCH341USB0"
-#     right_port = "/dev/ttyCH341USB1"
+    left_port = "/dev/ttyCH341USB1"
+    right_port = "/dev/ttyCH341USB0"
 
-#     left_arm = RobstrideMotorsSupervisor(
-#         port_name=left_port,
-#         motor_infos=motor_config,
-#         target_update_rate=10000.0,
-#     )
-#     right_arm = RobstrideMotorsSupervisor(
-#         port_name=right_port,
-#         motor_infos=motor_config,
-#         target_update_rate=10000.0,
-#     )
+    left_arm = RobstrideMotorsSupervisor(
+        port_name=left_port,
+        motor_infos=motor_config,
+        target_update_rate=10000.0,
+    )
+    right_arm = RobstrideMotorsSupervisor(
+        port_name=right_port,
+        motor_infos=motor_config,
+        target_update_rate=10000.0,
+    )
 
-#     return left_arm, right_arm
+    for motor_id in range(1, 6):
+        left_arm.add_motor_to_zero(motor_id)
+        right_arm.add_motor_to_zero(motor_id)
+
+    for motor_id in range(1, 3):
+        left_arm.set_kp(motor_id, 60.0)
+        right_arm.set_kp(motor_id, 60.0)
+
+        left_arm.set_kd(motor_id, 5.0)
+        right_arm.set_kd(motor_id, 5.0)
+    
+    for motor_id in range(3, 6):
+        left_arm.set_kp(motor_id, 10.0)
+        right_arm.set_kp(motor_id, 10.0)
+
+        left_arm.set_kd(motor_id, 0.1)
+        right_arm.set_kd(motor_id, 0.1)
+
+    return left_arm, right_arm
+
+@dataclass
+class GamepadInput:
+    joystick_x: float = 0.0
+    joystick_y: float = 0.0
+    joystick_z: float = 0.0
+    toggle_button_pressed: bool = False
 
 def inverse_kinematics(arm: str, goal_pos: np.ndarray) -> np.ndarray:
     """Performs inverse kinematics for the given arm."""
@@ -119,30 +150,29 @@ def inverse_kinematics(arm: str, goal_pos: np.ndarray) -> np.ndarray:
         joint_name = list(initial_positions.keys())[i]
         if joint_name in ee_chain:
             p.resetJointState(robot_id, joint_info[joint_name]["index"], val)
+            print(f"Setting {joint_name} to {val}")
 
     actual_pos, _ = p.getLinkState(robot_id, ee_id)[:2]
     error = np.linalg.norm(np.array(goal_pos) - np.array(actual_pos))
 
-    print(f"Arm: {arm}, Goal : {error}")
+    # print(f"Arm: {arm}, Error: {error}")
+    if arm == "left":
+        return np.array(solution[:4]) * -1
+    else:
+        return np.array(solution[4:])
 
-    return np.array(solution)
-
-def read_controller_input() -> tuple[float, float, float, bool]:
-    """Reads input from the Logitech controller and returns changes in position and button state."""
-    x_change, y_change, z_change = 0, 0, 0
-    toggle_button_pressed = False
-    events = get_gamepad()
-    for event in events:
-        if event.ev_type == 'Absolute':
-            if event.code == 'ABS_X':  # Left stick horizontal
-                x_change = event.state / 32768.0  # Normalize the value
-            elif event.code == 'ABS_Y':  # Left stick vertical
-                y_change = event.state / 32768.0
-            elif event.code == 'ABS_RZ':  # Right stick vertical
-                z_change = event.state / 32768.0
-        elif event.ev_type == 'Key' and event.code == 'BTN_SOUTH' and event.state == 1:
-            toggle_button_pressed = True
-    return x_change, y_change, z_change, toggle_button_pressed
+def controller_thread(shared_state: GamepadInput) -> None:
+    while True:
+        events = get_gamepad()
+        for event in events:
+            if event.code == 'ABS_X':
+                shared_state.joystick_x = event.state / 32768.0
+            elif event.code == 'ABS_Y':
+                shared_state.joystick_y = event.state / 32768.0
+            elif event.code == 'ABS_RY':
+                shared_state.joystick_z = event.state / 32768.0
+            elif event.code == 'BTN_SOUTH' and event.state == 1:
+                shared_state.toggle_button_pressed = True
 
 
 if __name__ == "__main__":
@@ -159,8 +189,8 @@ if __name__ == "__main__":
     robot_id = p.loadURDF("urdf/stompy_pro/robot.urdf", [0, 0, 0], useFixedBase=True)
     p.setGravity(0, 0, -9.81)
 
-    goal_pos_left = np.array([-0.25, -0.25, 0])
-    goal_pos_right = np.array([-0.25, 0.35, 0])
+    goal_pos_left = np.array([0, 0, 0]) + np.array([0, ROBOT_WIDTH / 2, ROBOT_HEIGHT])
+    goal_pos_right = np.array([0, 0, 0]) + np.array([0, -ROBOT_WIDTH / 2, ROBOT_HEIGHT])
 
     # Load joint info
     joint_info = {}
@@ -190,14 +220,22 @@ if __name__ == "__main__":
         # Initialize which arm to control
         control_left_arm = True
 
+        shared_state = GamepadInput()
+        controller_thread_task = threading.Thread(target=controller_thread, args=(shared_state,))
+        controller_thread_task.start()
+
         while True:
             # Read controller input
-            x_change, y_change, z_change, toggle_button_pressed = read_controller_input()
+            y_change, x_change, z_change, toggle_button_pressed = shared_state.joystick_x, shared_state.joystick_y, shared_state.joystick_z, shared_state.toggle_button_pressed
+
+            x_change *= -1 * 3
+            y_change *= -1 * 3
+            z_change *= -1 * 3
 
             # Toggle control between left and right arm
             if toggle_button_pressed:
                 control_left_arm = not control_left_arm
-                time.sleep(0.2)  # Debounce delay to prevent rapid toggling
+                shared_state.toggle_button_pressed = False
 
             # Update goal positions based on controller input
             if control_left_arm:
@@ -216,13 +254,13 @@ if __name__ == "__main__":
                 solution_right = np.add(solution_right, SIM_TO_REAL["right"])
 
                 for i, val in enumerate(solution_left):
-                    left_arm.set_position(i, val)
+                    left_arm.set_position(i+1, val)
 
                 for i, val in enumerate(solution_right):
-                    right_arm.set_position(i, val)
+                    right_arm.set_position(i+1, val)
 
             # Sleep to make the simulation more stable
-            time.sleep(0.01)
+            time.sleep(0.025)
     elif platform.system() == "Darwin":  # macOS
         # Create sliders for macOS
         left_x_slider = p.addUserDebugParameter("Left X", -1, 1, 0)
@@ -256,10 +294,16 @@ if __name__ == "__main__":
                 solution_right = np.add(solution_right, SIM_TO_REAL["right"])
 
                 for i, val in enumerate(solution_left):
-                    left_arm.set_position(i, val)
+                    if abs(val) < 0.1:
+                        left_arm.set_position(i+1, val)
+                    else:
+                        print(f"Set point for left arm joint {i+1} is too high: {val}")
 
                 for i, val in enumerate(solution_right):
-                    right_arm.set_position(i, val)
+                    if abs(val) < 0.1:
+                        right_arm.set_position(i+1, val)
+                    else:
+                        print(f"Set point for right arm joint {i+1} is too high: {val}")
 
             # Sleep to make the simulation more stable
             time.sleep(0.01)
