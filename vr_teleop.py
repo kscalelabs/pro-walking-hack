@@ -155,6 +155,7 @@ def inverse_kinematics(arm: str, goal_pos: np.ndarray) -> np.ndarray:
         lowerLimits=lower_limits,
         upperLimits=upper_limits,
         jointRanges=joint_ranges,
+        restPoses=SIM_TO_REAL[arm],
     )
 
     # Safety check: Ensure the solution is within acceptable limits
@@ -265,6 +266,7 @@ if __name__ == "__main__":
         )
         
         while True:
+            process_start = time.time()
             # Update goal positions based on hand tracking input
             goal_pos_left = shared_state.left_hand_position
             goal_pos_right = shared_state.right_hand_position
@@ -295,6 +297,7 @@ if __name__ == "__main__":
             )
 
             # Sleep to make the simulation more stable
-            await asyncio.sleep(0.025)
+            print(f"Time elapsed: {time.time() - process_start}")
+            await asyncio.sleep(1/60.0)
 
     app.run()
