@@ -14,7 +14,7 @@ from actuator import RobstrideMotorsSupervisor
 from vuer import Vuer, VuerSession
 from vuer.schemas import Hands, PointLight, Urdf
 
-URDF_WEB = "https://raw.githubusercontent.com/kscalelabs/teleop/d5960dfe1de14dffd3eb990ab8b4a1425bd62406/urdf/stompy_pro/robot.urdf"
+URDF_WEB = "https://raw.githubusercontent.com/kscalelabs/teleop/8d1818cb303b26e234307a99b1bff65dad93d140/urdf/stompy_pro/robot.urdf"
 
 VUER_TRUNK_ROTATION = [-np.pi/2, 0, np.pi/2]
 VUER_TRUNK_POSITION = np.array([0, 0.63, 0])
@@ -264,6 +264,8 @@ if __name__ == "__main__":
             rotation=VUER_TRUNK_ROTATION,
             key="robot",
         )
+
+        counter = 0
         
         while True:
             process_start = time.time()
@@ -273,9 +275,12 @@ if __name__ == "__main__":
 
             p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.25)
             p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
+            
+            if counter % 10 == 0:
+                solution_left = inverse_kinematics("left", goal_pos_left)
+                solution_right = inverse_kinematics("right", goal_pos_right)
 
-            solution_left = inverse_kinematics("left", goal_pos_left)
-            solution_right = inverse_kinematics("right", goal_pos_right)
+            counter += 1
 
             if args.real:
                 solution_left = np.add(solution_left, SIM_TO_REAL["left"])
