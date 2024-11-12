@@ -4,6 +4,8 @@ import time
 from typing import List, Dict
 import numpy as np
 from actuator import RobstrideMotorsSupervisor
+import json
+from pathlib import Path
 
 TARGET_RATE = 60.0 # Hz
 
@@ -24,11 +26,13 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
         port_name=left_port,
         motor_infos=motor_config,
         target_update_rate=10000.0,
+        zero_on_init=True,
     )
     right_arm = RobstrideMotorsSupervisor(
         port_name=right_port,
         motor_infos=motor_config,
         target_update_rate=10000.0,
+        zero_on_init=True,
     )
 
     # Initialize motors
@@ -42,16 +46,28 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
     return left_arm, right_arm
 
 def record_positions(left_arm: RobstrideMotorsSupervisor, 
-                    right_arm: RobstrideMotorsSupervisor) -> List[Dict[str, np.ndarray]]:
-    """Record positions until user presses Enter."""
+                    right_arm: RobstrideMotorsSupervisor,
+                    save_file: str | None = None) -> List[Dict[str, np.ndarray]]:
+    """Record positions until user presses Enter.
+    
+    Args:
+        left_arm: Left arm supervisor
+        right_arm: Right arm supervisor
+        save_file: Optional path to save recorded positions
+    """
     positions = [{"left": [0]*5, "right": [0]*5}]*20
     print("\nRecording started. Press Ctrl+C to stop recording...")
 
-    for i in range(1, 6):
-        left_arm.set_kp(i, 30.0)
-        left_arm.set_kd(i, 2.0)
-        right_arm.set_kp(i, 30.0)
-        right_arm.set_kd(i, 2.0)
+    for i in range(1, 5):
+        left_arm.set_kp(i, 10.0)
+        left_arm.set_kd(i, 1.0)
+        right_arm.set_kp(i, 10.0)
+        right_arm.set_kd(i, 1.0)
+    
+    left_arm.set_kp(5, 1.0)
+    left_arm.set_kd(5, 0.1)
+    right_arm.set_kp(5, 1.0)
+    right_arm.set_kd(5, 0.1)
 
     try:
         while True:
@@ -79,7 +95,25 @@ def record_positions(left_arm: RobstrideMotorsSupervisor,
         print("\nRecording interrupted.")
 
     print(f"Recording stopped. Captured {len(positions)} frames.")
-    # print(positions)
+    
+    if save_file:
+        json_positions = [
+            {
+                "left": pos["left"].tolist(),
+                "right": pos["right"].tolist()
+            } for pos in positions
+        ]
+        
+        save_data = {
+            "target_rate": TARGET_RATE,
+            "positions": json_positions
+        }
+        
+        Path(save_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(save_file, 'w') as f:
+            json.dump(save_data, f, indent=2)
+        print(f"Saved recording to {save_file}")
+        
     return positions
 
 def replay_positions(positions: List[Dict[str, np.ndarray]], 
@@ -95,10 +129,10 @@ def replay_positions(positions: List[Dict[str, np.ndarray]],
             for i in range(5):
                 set_time = time.time()
                 left_arm.set_position(i + 1, pos["left"][i])
-                print(f"Set left arm {i + 1} in {time.time() - set_time} seconds")
+                # print(f"Set left arm {i + 1} in {time.time() - set_time} seconds")
                 set_time = time.time()
                 right_arm.set_position(i + 1, pos["right"][i])
-                print(f"Set right arm {i + 1} in {time.time() - set_time} seconds")
+                # print(f"Set right arm {i + 1} in {time.time() - set_time} seconds")
             
             sleep_time = max(0, 1.0 / TARGET_RATE - (time.time() - start_time))
             # print(f"Sleeping for {sleep_time} ({time.time() - start_time}) seconds")
@@ -116,8 +150,11 @@ def main():
     try:
         while True:
             if recorded_positions is None:
+                save_path = input("Enter path to save recording (or press Enter to skip saving): ").strip()
+                save_file = save_path if save_path else None
+                
                 input("Press Enter to start recording...")
-                recorded_positions = record_positions(left_arm, right_arm)
+                recorded_positions = record_positions(left_arm, right_arm, save_file)
 
                 print("Returning to home position...")
 
@@ -151,8 +188,7 @@ def main():
 
             else:
                 input("Press Enter to replay motion (or Ctrl+C to exit)...")
-                for _ in range(100):
-                    replay_positions(recorded_positions, left_arm, right_arm)
+                replay_positions(recorded_positions, left_arm, right_arm)
     
     except KeyboardInterrupt:
         print("\nExiting...")
