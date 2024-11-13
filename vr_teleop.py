@@ -1,10 +1,14 @@
-"""Simple ik script for Stompy Pro."""
+"""Simple vr teleop script for Stompy Pro.
+
+python vr_teleop.py --real
+
+make sure to run `ngrok http 8012` to serve the vuer app over the network
+
+"""
 import argparse
-from dataclasses import dataclass, field
-import platform
-import threading
-import time
 import asyncio
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -16,13 +20,13 @@ from vuer.schemas import Hands, PointLight, Urdf
 
 URDF_WEB = "https://raw.githubusercontent.com/kscalelabs/teleop/8d1818cb303b26e234307a99b1bff65dad93d140/urdf/stompy_pro/robot.urdf"
 
-VUER_TRUNK_ROTATION = [-np.pi/2, 0, np.pi/2]
-VUER_TRUNK_POSITION = np.array([0, 0.63*1.5, 0])
+VUER_TRUNK_ROTATION = [-np.pi/2, 0, np.pi/2] # Vuer robot rotation
+VUER_TRUNK_POSITION = np.array([0, 0.63*1.5, 0]) # Vuer robot position
 
-PYBULLET_TRUNK_ROTATION = [0, 0, np.pi]
-PYBULLET_TRUNK_POSITION = np.array([0, 0, 1])
+PYBULLET_TRUNK_ROTATION = [0, 0, np.pi] # Pybullet robot rotation
+PYBULLET_TRUNK_POSITION = np.array([0, 0, 1]) # Pybullet robot position
 
-EEL_JOINT = "left_end_effector_joint"
+EEL_JOINT = "left_end_effector_joint" # Left arm end effector joint - used for IK
 EER_JOINT = "right_end_effector_joint"
 
 ROBOT_HEIGHT = 1.0
@@ -31,19 +35,20 @@ ROBOT_WIDTH = 0.5
 MAX_JOINT_DELTA = 3 #0.5 # radians
 
 # Constants for hand tracking
-PB_TO_VUER_AXES = [2, 0, 1]
-PB_TO_VUER_AXES_SIGN = np.array([1, 1, 1], dtype=np.int8)
+PB_TO_VUER_AXES = [2, 0, 1] # Maps vuer axes to pybullet axes
+PB_TO_VUER_AXES_SIGN = np.array([1, 1, 1], dtype=np.int8) # Sign of vuer axes
 
 # Hand tracking parameters
 INDEX_FINGER_TIP_ID, THUMB_FINGER_TIP_ID, MIDDLE_FINGER_TIP_ID = 9, 4, 14 #8, 4, 14
-PINCH_DIST_CLOSED, PINCH_DIST_OPENED = 0.1, 0.1  # 10 cm
+PINCH_DIST_CLOSED, PINCH_DIST_OPENED = 0.1, 0.1     # 10 cm
 MAX_PINCH_DIST = 0.12 #appox 12cm at max pinch
-EE_S_MIN, EE_S_MAX = 0.0, 0.05
 
-ROTATION_MAX = np.pi # 180 degrees max rotation range
+ROTATION_MAX = np.pi # 180 degrees max rotation range for wrist pitch
 
-PB_TO_VUER_OFFSET = PYBULLET_TRUNK_POSITION - VUER_TRUNK_POSITION[PB_TO_VUER_AXES] * PB_TO_VUER_AXES_SIGN
+PB_TO_VUER_OFFSET = PYBULLET_TRUNK_POSITION - VUER_TRUNK_POSITION[PB_TO_VUER_AXES] * PB_TO_VUER_AXES_SIGN # Offset between pybullet and vuer trunk positions (used for mapping hand input to pybullet targets)
+
 # TODO: Figure out how to map Pybullet joint positions to real joint positions
+# Currently just zeroing at arms down position (like in default pybullet URDF)
 SIM_TO_REAL = {
     "left": np.array([0,
                       0,
@@ -92,6 +97,7 @@ class VuerInput:
     prev_solution_right: np.ndarray = field(default_factory=lambda: np.zeros(4))
 
 def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
+    # From top down on the robot torso
     motor_config = {
         1: "03",
         2: "03",
@@ -103,6 +109,7 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
     left_port = "/dev/ttyCH341USB0"
     right_port = "/dev/ttyCH341USB1"
 
+    # Initialize motors
     left_arm = RobstrideMotorsSupervisor(
         port_name=left_port,
         motor_infos=motor_config,
@@ -114,10 +121,13 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
         target_update_rate=10000.0,
     )
 
+    # Add motors to zero
     for motor_id in range(1, 6):
         left_arm.add_motor_to_zero(motor_id)
         right_arm.add_motor_to_zero(motor_id)
 
+
+    # Set PD constants and safety limits for 04 motors
     for motor_id in range(1, 3):
         left_arm.set_kp(motor_id, 30.0)
         right_arm.set_kp(motor_id, 30.0)
@@ -130,7 +140,8 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
 
         left_arm.set_speed_limit(motor_id, 1.0) # rad/s
         right_arm.set_speed_limit(motor_id, 1.0)
-    
+
+    # Set PD constants and safety limits for 02 motors
     for motor_id in range(3, 6):
         left_arm.set_kp(motor_id, 10.0)
         right_arm.set_kp(motor_id, 10.0)
@@ -244,6 +255,7 @@ if __name__ == "__main__":
     robot_id = p.loadURDF("urdf/stompy_pro/robot.urdf", [0, 0, 0], useFixedBase=True)
     p.setGravity(0, 0, -9.81)
 
+    # Initial goal positions
     goal_pos_left = np.array([0, 0, 0]) + np.array([0, ROBOT_WIDTH / 2, ROBOT_HEIGHT])
     goal_pos_right = np.array([0, 0, 0]) + np.array([0, -ROBOT_WIDTH / 2, ROBOT_HEIGHT])
 
@@ -293,7 +305,7 @@ if __name__ == "__main__":
         )
 
         counter = 0
-        
+
         while True:
             process_start = time.time()
             # Update goal positions based on hand tracking input
@@ -302,28 +314,30 @@ if __name__ == "__main__":
 
             p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.25)
             p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
-            
+
             if counter % 1 == 0:
                 raw_solution_left = inverse_kinematics("left", goal_pos_left)
                 raw_solution_right = inverse_kinematics("right", goal_pos_right)
-                
+
                 # Apply EMA smoothing
                 shared_state.prev_solution_left = apply_ema(raw_solution_left, shared_state.prev_solution_left)
                 shared_state.prev_solution_right = apply_ema(raw_solution_right, shared_state.prev_solution_right)
-                
+
                 solution_left = shared_state.prev_solution_left
                 solution_right = shared_state.prev_solution_right
 
             counter += 1
 
+            # Send commands to real robot
             if args.real:
                 solution_left = np.add(solution_left, SIM_TO_REAL["left"])
                 solution_right = np.add(solution_right, SIM_TO_REAL["right"])
 
-                left_rotation = ((shared_state.left_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX # remaps pinch dist (0 to 0.12) to (-pi/4 to pi/4)
+                left_rotation = ((shared_state.left_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX # remaps pinch dist (0 to 0.12) to (-pi/2 to pi/2)
                 right_rotation = ((shared_state.right_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX
 
                 for i, val in enumerate(solution_left):
+                    # Offset by 1 because the motors are 1-indexed
                     left_arm.set_position(i+1, val)
 
                 for i, val in enumerate(solution_right):
@@ -331,7 +345,7 @@ if __name__ == "__main__":
 
                 left_arm.set_position(5, left_rotation) # wrist pitch
                 right_arm.set_position(5, right_rotation)
-                    
+
             # Update Vuer with the current joint positions
             session.upsert @ Urdf(
                 src=URDF_WEB,
