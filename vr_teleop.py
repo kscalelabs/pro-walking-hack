@@ -17,7 +17,7 @@ from vuer.schemas import Hands, PointLight, Urdf
 URDF_WEB = "https://raw.githubusercontent.com/kscalelabs/teleop/8d1818cb303b26e234307a99b1bff65dad93d140/urdf/stompy_pro/robot.urdf"
 
 VUER_TRUNK_ROTATION = [-np.pi/2, 0, np.pi/2]
-VUER_TRUNK_POSITION = np.array([0, 0.63, 0])
+VUER_TRUNK_POSITION = np.array([0, 0.63*1.5, 0])
 
 PYBULLET_TRUNK_ROTATION = [0, 0, np.pi]
 PYBULLET_TRUNK_POSITION = np.array([0, 0, 1])
@@ -37,7 +37,10 @@ PB_TO_VUER_AXES_SIGN = np.array([1, 1, 1], dtype=np.int8)
 # Hand tracking parameters
 INDEX_FINGER_TIP_ID, THUMB_FINGER_TIP_ID, MIDDLE_FINGER_TIP_ID = 8, 4, 14
 PINCH_DIST_CLOSED, PINCH_DIST_OPENED = 0.1, 0.1  # 10 cm
+MAX_PINCH_DIST = 0.12 #appox 12cm at max pinch
 EE_S_MIN, EE_S_MAX = 0.0, 0.05
+
+ROTATION_MAX = np.pi # 180 degrees max rotation range
 
 PB_TO_VUER_OFFSET = PYBULLET_TRUNK_POSITION - VUER_TRUNK_POSITION[PB_TO_VUER_AXES] * PB_TO_VUER_AXES_SIGN
 # TODO: Figure out how to map Pybullet joint positions to real joint positions
@@ -83,6 +86,8 @@ class VuerInput:
     right_hand_position: np.ndarray = field(default_factory=lambda: np.zeros(3))
     left_hand_pinch: bool = False
     right_hand_pinch: bool = False
+    left_hand_pinch_dist: float = 0.0
+    right_hand_pinch_dist: float = 0.0
 
 def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
     motor_config = {
@@ -117,6 +122,12 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
 
         left_arm.set_kd(motor_id, 5.0)
         right_arm.set_kd(motor_id, 5.0)
+
+        left_arm.set_torque_limit(motor_id, 5.0)
+        right_arm.set_torque_limit(motor_id, 5.0)
+
+        left_arm.set_speed_limit(motor_id, 12.0) # rad/s
+        right_arm.set_speed_limit(motor_id, 12.0)
     
     for motor_id in range(3, 6):
         left_arm.set_kp(motor_id, 10.0)
@@ -124,6 +135,12 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
 
         left_arm.set_kd(motor_id, 0.1)
         right_arm.set_kd(motor_id, 0.1)
+
+        left_arm.set_torque_limit(motor_id, 1.0)
+        right_arm.set_torque_limit(motor_id, 1.0)
+
+        left_arm.set_speed_limit(motor_id, 12.0) # rad/s
+        right_arm.set_speed_limit(motor_id, 12.0)
 
     return left_arm, right_arm
 
@@ -189,6 +206,7 @@ def hand_move_handler(event: Any, shared_state: VuerInput) -> None:
     rthumb_pos = np.array(event.value["rightLandmarks"][THUMB_FINGER_TIP_ID])
     rpinch_dist = np.linalg.norm(np.array(event.value["rightLandmarks"][INDEX_FINGER_TIP_ID]) - rthumb_pos)
     shared_state.right_hand_pinch = rpinch_dist < PINCH_DIST_CLOSED
+    shared_state.right_hand_pinch_dist = rpinch_dist
     if shared_state.right_hand_pinch:
         shared_state.right_hand_position = (
             np.multiply(rthumb_pos[PB_TO_VUER_AXES], PB_TO_VUER_AXES_SIGN) + PB_TO_VUER_OFFSET
@@ -198,6 +216,7 @@ def hand_move_handler(event: Any, shared_state: VuerInput) -> None:
     lthumb_pos = np.array(event.value["leftLandmarks"][THUMB_FINGER_TIP_ID])
     lpinch_dist = np.linalg.norm(np.array(event.value["leftLandmarks"][INDEX_FINGER_TIP_ID]) - lthumb_pos)
     shared_state.left_hand_pinch = lpinch_dist < PINCH_DIST_CLOSED
+    shared_state.left_hand_pinch_dist = lpinch_dist
     if shared_state.left_hand_pinch:
         shared_state.left_hand_position = (
             np.multiply(lthumb_pos[PB_TO_VUER_AXES], PB_TO_VUER_AXES_SIGN) + PB_TO_VUER_OFFSET
@@ -249,7 +268,6 @@ if __name__ == "__main__":
 
     @app.add_handler("HAND_MOVE")
     async def hand_move_wrapper(event: Any, _: Any) -> None:
-        await asyncio.sleep(2)
         hand_move_handler(event, shared_state)
 
     @app.spawn(start=True)
@@ -276,7 +294,7 @@ if __name__ == "__main__":
             p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.25)
             p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
             
-            if counter % 10 == 0:
+            if counter % 1 == 0:
                 solution_left = inverse_kinematics("left", goal_pos_left)
                 solution_right = inverse_kinematics("right", goal_pos_right)
 
@@ -286,12 +304,18 @@ if __name__ == "__main__":
                 solution_left = np.add(solution_left, SIM_TO_REAL["left"])
                 solution_right = np.add(solution_right, SIM_TO_REAL["right"])
 
+                left_rotation = ((shared_state.left_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX # remaps pinch dist (0 to 0.12) to (-pi/4 to pi/4)
+                right_rotation = ((shared_state.right_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX
+
                 for i, val in enumerate(solution_left):
                     left_arm.set_position(i+1, val)
 
                 for i, val in enumerate(solution_right):
                     right_arm.set_position(i+1, val)
 
+                left_arm.set_position(5, left_rotation) # wrist pitch
+                right_arm.set_position(5, right_rotation)
+                    
             # Update Vuer with the current joint positions
             session.upsert @ Urdf(
                 src=URDF_WEB,
@@ -302,7 +326,6 @@ if __name__ == "__main__":
             )
 
             # Sleep to make the simulation more stable
-            print(f"Time elapsed: {time.time() - process_start}")
             await asyncio.sleep(1/60.0)
 
     app.run()
