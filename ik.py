@@ -284,8 +284,8 @@ if __name__ == "__main__":
             goal_pos_left = np.array([left_x, left_y, left_z])
             goal_pos_right = np.array([right_x, right_y, right_z])
 
-            p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.01)
-            p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.01)
+            p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.1)
+            p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.1)
 
             solution_left = inverse_kinematics("left", goal_pos_left)
             solution_right = inverse_kinematics("right", goal_pos_right)
