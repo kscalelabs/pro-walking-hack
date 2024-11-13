@@ -254,7 +254,8 @@ if __name__ == "__main__":
                 solution_right = np.add(solution_right, SIM_TO_REAL["right"])
 
                 for i, val in enumerate(solution_left):
-                    left_arm.set_position(i+1, val)
+                    # left_arm.set_position(i+1, val)
+                    pass
 
                 for i, val in enumerate(solution_right):
                     right_arm.set_position(i+1, val)
@@ -283,8 +284,8 @@ if __name__ == "__main__":
             goal_pos_left = np.array([left_x, left_y, left_z])
             goal_pos_right = np.array([right_x, right_y, right_z])
 
-            p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20)
-            p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20)
+            p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.01)
+            p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.01)
 
             solution_left = inverse_kinematics("left", goal_pos_left)
             solution_right = inverse_kinematics("right", goal_pos_right)

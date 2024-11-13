@@ -137,7 +137,8 @@
     <joint name="left_end_effector_joint" type="fixed">
       <parent link="L_farm"/>
       <child link="left_end_effector_link"/>
-      <origin xyz="-.05 0 -.1" rpy="0 0 0"/>  <!-- Adjust these values to position it at the tip -->
+      <!-- <origin xyz="-.05 0 -.1" rpy="0 0 0"/>  Adjust these values to position it at the tip -->
+      <origin xyz="-0.05 0 -0.1" rpy="0 0 0"/>
     </joint>
   <joint name="R_shoulder_y" type="revolute">
     <origin rpy="0 0 0" xyz="0 -0.255 0.45" />
@@ -245,6 +246,7 @@
     <joint name="right_end_effector_joint" type="fixed">
       <parent link="R_farm"/>
       <child link="right_end_effector_link"/>
-      <origin xyz="-.05 0 -.1" rpy="0 0 0"/>  <!-- Adjust these values to position it at the tip -->
+      <!-- <origin xyz="-.05 0 -.1" rpy="0 0 0"/>  Adjust these values to position it at the tip -->
+      <origin xyz="-0.05 0 -0.1" rpy="0 0 0"/>
     </joint>
   </robot>

@@ -17,3 +17,6 @@ torch
 onnx
 onnxruntime
 onnxscript
+
+# Vuer
+vuer==0.0.30

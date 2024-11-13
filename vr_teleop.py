@@ -35,7 +35,7 @@ PB_TO_VUER_AXES = [2, 0, 1]
 PB_TO_VUER_AXES_SIGN = np.array([1, 1, 1], dtype=np.int8)
 
 # Hand tracking parameters
-INDEX_FINGER_TIP_ID, THUMB_FINGER_TIP_ID, MIDDLE_FINGER_TIP_ID = 8, 4, 14
+INDEX_FINGER_TIP_ID, THUMB_FINGER_TIP_ID, MIDDLE_FINGER_TIP_ID = 9, 4, 14 #8, 4, 14
 PINCH_DIST_CLOSED, PINCH_DIST_OPENED = 0.1, 0.1  # 10 cm
 MAX_PINCH_DIST = 0.12 #appox 12cm at max pinch
 EE_S_MIN, EE_S_MAX = 0.0, 0.05
@@ -88,6 +88,8 @@ class VuerInput:
     right_hand_pinch: bool = False
     left_hand_pinch_dist: float = 0.0
     right_hand_pinch_dist: float = 0.0
+    prev_solution_left: np.ndarray = field(default_factory=lambda: np.zeros(4))
+    prev_solution_right: np.ndarray = field(default_factory=lambda: np.zeros(4))
 
 def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
     motor_config = {
@@ -98,8 +100,8 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
         5: "01",
     }
 
-    left_port = "/dev/ttyCH341USB1"
-    right_port = "/dev/ttyCH341USB0"
+    left_port = "/dev/ttyCH341USB0"
+    right_port = "/dev/ttyCH341USB1"
 
     left_arm = RobstrideMotorsSupervisor(
         port_name=left_port,
@@ -117,17 +119,17 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
         right_arm.add_motor_to_zero(motor_id)
 
     for motor_id in range(1, 3):
-        left_arm.set_kp(motor_id, 60.0)
-        right_arm.set_kp(motor_id, 60.0)
+        left_arm.set_kp(motor_id, 30.0)
+        right_arm.set_kp(motor_id, 30.0)
 
-        left_arm.set_kd(motor_id, 5.0)
-        right_arm.set_kd(motor_id, 5.0)
+        left_arm.set_kd(motor_id, 1.0)
+        right_arm.set_kd(motor_id, 1.0)
 
-        left_arm.set_torque_limit(motor_id, 5.0)
-        right_arm.set_torque_limit(motor_id, 5.0)
+        left_arm.set_torque_limit(motor_id, 1.0)
+        right_arm.set_torque_limit(motor_id, 1.0)
 
-        left_arm.set_speed_limit(motor_id, 12.0) # rad/s
-        right_arm.set_speed_limit(motor_id, 12.0)
+        left_arm.set_speed_limit(motor_id, 1.0) # rad/s
+        right_arm.set_speed_limit(motor_id, 1.0)
     
     for motor_id in range(3, 6):
         left_arm.set_kp(motor_id, 10.0)
@@ -139,8 +141,8 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
         left_arm.set_torque_limit(motor_id, 1.0)
         right_arm.set_torque_limit(motor_id, 1.0)
 
-        left_arm.set_speed_limit(motor_id, 12.0) # rad/s
-        right_arm.set_speed_limit(motor_id, 12.0)
+        left_arm.set_speed_limit(motor_id, 1.0) # rad/s
+        right_arm.set_speed_limit(motor_id, 1.0)
 
     return left_arm, right_arm
 
@@ -204,7 +206,8 @@ def hand_move_handler(event: Any, shared_state: VuerInput) -> None:
     """Handle hand movement events from Vuer."""
     # Right hand
     rthumb_pos = np.array(event.value["rightLandmarks"][THUMB_FINGER_TIP_ID])
-    rpinch_dist = np.linalg.norm(np.array(event.value["rightLandmarks"][INDEX_FINGER_TIP_ID]) - rthumb_pos)
+    rindex_pos = np.array(event.value["rightLandmarks"][INDEX_FINGER_TIP_ID])
+    rpinch_dist = np.linalg.norm(rindex_pos - rthumb_pos)
     shared_state.right_hand_pinch = rpinch_dist < PINCH_DIST_CLOSED
     shared_state.right_hand_pinch_dist = rpinch_dist
     if shared_state.right_hand_pinch:
@@ -214,13 +217,18 @@ def hand_move_handler(event: Any, shared_state: VuerInput) -> None:
 
     # Left hand
     lthumb_pos = np.array(event.value["leftLandmarks"][THUMB_FINGER_TIP_ID])
-    lpinch_dist = np.linalg.norm(np.array(event.value["leftLandmarks"][INDEX_FINGER_TIP_ID]) - lthumb_pos)
+    lindex_pos = np.array(event.value["leftLandmarks"][INDEX_FINGER_TIP_ID])
+    lpinch_dist = np.linalg.norm(lindex_pos - lthumb_pos)
     shared_state.left_hand_pinch = lpinch_dist < PINCH_DIST_CLOSED
     shared_state.left_hand_pinch_dist = lpinch_dist
     if shared_state.left_hand_pinch:
         shared_state.left_hand_position = (
             np.multiply(lthumb_pos[PB_TO_VUER_AXES], PB_TO_VUER_AXES_SIGN) + PB_TO_VUER_OFFSET
         )
+
+def apply_ema(current: np.ndarray, previous: np.ndarray, alpha: float = 0.4) -> np.ndarray:
+    """Apply Exponential Moving Average smoothing."""
+    return alpha * current + (1 - alpha) * previous
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -274,6 +282,7 @@ if __name__ == "__main__":
     async def app_main(session: VuerSession) -> None:
         session.upsert @ PointLight(intensity=10.0, position=[0, 2, 2])
         session.upsert @ Hands(fps=30, stream=True, key="hands")
+
         await asyncio.sleep(0.1)
         session.upsert @ Urdf(
             src=URDF_WEB,
@@ -295,8 +304,15 @@ if __name__ == "__main__":
             p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
             
             if counter % 1 == 0:
-                solution_left = inverse_kinematics("left", goal_pos_left)
-                solution_right = inverse_kinematics("right", goal_pos_right)
+                raw_solution_left = inverse_kinematics("left", goal_pos_left)
+                raw_solution_right = inverse_kinematics("right", goal_pos_right)
+                
+                # Apply EMA smoothing
+                shared_state.prev_solution_left = apply_ema(raw_solution_left, shared_state.prev_solution_left)
+                shared_state.prev_solution_right = apply_ema(raw_solution_right, shared_state.prev_solution_right)
+                
+                solution_left = shared_state.prev_solution_left
+                solution_right = shared_state.prev_solution_right
 
             counter += 1
 
