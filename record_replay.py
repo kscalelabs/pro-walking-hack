@@ -1,11 +1,12 @@
 """Record and replay joint positions for Stompy Pro."""
 
 import time
-from typing import List, Dict
+from typing import Dict, List
+
 import numpy as np
 from actuator import RobstrideMotorsSupervisor
 
-TARGET_RATE = 60.0 # Hz
+TARGET_RATE = 60.0  # Hz
 
 motor_config = {
     1: "03",
@@ -14,6 +15,7 @@ motor_config = {
     4: "01",
     5: "01",
 }
+
 
 def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
     """Initialize both arms of the robot."""
@@ -41,10 +43,12 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
 
     return left_arm, right_arm
 
-def record_positions(left_arm: RobstrideMotorsSupervisor, 
-                    right_arm: RobstrideMotorsSupervisor) -> List[Dict[str, np.ndarray]]:
+
+def record_positions(
+    left_arm: RobstrideMotorsSupervisor, right_arm: RobstrideMotorsSupervisor
+) -> List[Dict[str, np.ndarray]]:
     """Record positions until user presses Enter."""
-    positions = [{"left": [0]*5, "right": [0]*5}]*20
+    positions = [{"left": [0] * 5, "right": [0] * 5}] * 20
     print("\nRecording started. Press Ctrl+C to stop recording...")
 
     for i in range(1, 6):
@@ -60,10 +64,10 @@ def record_positions(left_arm: RobstrideMotorsSupervisor,
             # Get current positions
             left_feedback = left_arm.get_latest_feedback()
             right_feedback = right_arm.get_latest_feedback()
-            
+
             current_pos = {
                 "left": np.array([left_feedback[i].position for i in range(1, 6)]),
-                "right": np.array([right_feedback[i].position for i in range(1, 6)])
+                "right": np.array([right_feedback[i].position for i in range(1, 6)]),
             }
             positions.append(current_pos)
 
@@ -74,7 +78,7 @@ def record_positions(left_arm: RobstrideMotorsSupervisor,
 
             cur_time = time.time()
             time.sleep(max(0, 1.0 / TARGET_RATE - (cur_time - last_time)))
-            
+
     except KeyboardInterrupt:
         print("\nRecording interrupted.")
 
@@ -82,12 +86,13 @@ def record_positions(left_arm: RobstrideMotorsSupervisor,
     # print(positions)
     return positions
 
-def replay_positions(positions: List[Dict[str, np.ndarray]], 
-                    left_arm: RobstrideMotorsSupervisor, 
-                    right_arm: RobstrideMotorsSupervisor) -> None:
+
+def replay_positions(
+    positions: List[Dict[str, np.ndarray]], left_arm: RobstrideMotorsSupervisor, right_arm: RobstrideMotorsSupervisor
+) -> None:
     """Replay recorded positions."""
     print("\nReplaying motion... Press Ctrl+C to stop.")
-    
+
     try:
         for pos in positions:
             start_time = time.time()
@@ -99,20 +104,21 @@ def replay_positions(positions: List[Dict[str, np.ndarray]],
                 set_time = time.time()
                 right_arm.set_position(i + 1, pos["right"][i])
                 print(f"Set right arm {i + 1} in {time.time() - set_time} seconds")
-            
+
             sleep_time = max(0, 1.0 / TARGET_RATE - (time.time() - start_time))
             # print(f"Sleeping for {sleep_time} ({time.time() - start_time}) seconds")
             time.sleep(sleep_time)
-            
+
     except KeyboardInterrupt:
         print("\nReplay interrupted.")
         raise
+
 
 def main():
     print("Initializing robot...")
     left_arm, right_arm = initialize_robot()
     recorded_positions = None
-    
+
     try:
         while True:
             if recorded_positions is None:
@@ -127,13 +133,13 @@ def main():
                     right_arm.set_kp(motor_id, 10.0)
                     left_arm.set_kd(motor_id, 2.0)
                     right_arm.set_kd(motor_id, 2.0)
-                
+
                 for motor_id in range(3, 6):
                     left_arm.set_kp(motor_id, 10.0)
                     right_arm.set_kp(motor_id, 10.0)
                     left_arm.set_kd(motor_id, 2.0)
                     right_arm.set_kd(motor_id, 2.0)
-                
+
                 time.sleep(1.0)
 
                 # Set PD gains
@@ -142,7 +148,7 @@ def main():
                     right_arm.set_kp(motor_id, 120.0)
                     left_arm.set_kd(motor_id, 5.0)
                     right_arm.set_kd(motor_id, 5.0)
-                
+
                 for motor_id in range(3, 6):
                     left_arm.set_kp(motor_id, 30.0)
                     right_arm.set_kp(motor_id, 30.0)
@@ -153,9 +159,10 @@ def main():
                 input("Press Enter to replay motion (or Ctrl+C to exit)...")
                 for _ in range(100):
                     replay_positions(recorded_positions, left_arm, right_arm)
-    
+
     except KeyboardInterrupt:
         print("\nExiting...")
+
 
 if __name__ == "__main__":
     main()
