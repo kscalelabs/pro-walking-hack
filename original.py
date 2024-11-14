@@ -1,8 +1,9 @@
 """Simple vr teleop script for Stompy Pro.
 
-python demo.py --real
+python vr_teleop.py --real
 
 make sure to run `ngrok http 8012` to serve the vuer app over the network
+
 """
 import argparse
 import asyncio
@@ -16,11 +17,6 @@ import pybullet_data
 from actuator import RobstrideMotorsSupervisor
 from vuer import Vuer, VuerSession
 from vuer.schemas import Hands, PointLight, Urdf
-import yaml
-import math
-from typing import Dict, Any
-from numpy.typing import NDArray
-
 
 URDF_WEB = "https://raw.githubusercontent.com/kscalelabs/teleop/8d1818cb303b26e234307a99b1bff65dad93d140/urdf/stompy_pro/robot.urdf"
 
@@ -89,7 +85,6 @@ eel_chain = [
     "L_elbow_x",
 ]
 
-
 @dataclass
 class VuerInput:
     left_hand_position: np.ndarray = field(default_factory=lambda: np.zeros(3))
@@ -100,7 +95,6 @@ class VuerInput:
     right_hand_pinch_dist: float = 0.0
     prev_solution_left: np.ndarray = field(default_factory=lambda: np.zeros(4))
     prev_solution_right: np.ndarray = field(default_factory=lambda: np.zeros(4))
-
 
 def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSupervisor]:
     # From top down on the robot torso
@@ -162,7 +156,6 @@ def initialize_robot() -> tuple[RobstrideMotorsSupervisor, RobstrideMotorsSuperv
         right_arm.set_speed_limit(motor_id, 1.0)
 
     return left_arm, right_arm
-
 
 def inverse_kinematics(arm: str, goal_pos: np.ndarray) -> np.ndarray:
     """Performs inverse kinematics for the given arm."""
@@ -244,218 +237,125 @@ def hand_move_handler(event: Any, shared_state: VuerInput) -> None:
             np.multiply(lthumb_pos[PB_TO_VUER_AXES], PB_TO_VUER_AXES_SIGN) + PB_TO_VUER_OFFSET
         )
 
-
 def apply_ema(current: np.ndarray, previous: np.ndarray, alpha: float = 0.4) -> np.ndarray:
     """Apply Exponential Moving Average smoothing."""
     return alpha * current + (1 - alpha) * previous
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--real", action="store_true")
+    args = parser.parse_args()
 
-class TeleopRobot:
-    def __init__(
-        self, real: bool = False, embodiment: str, use_firmware: bool = False, shared_dict: dict = {}
-    ) -> None:
-        self.app = Vuer()
+    if args.real:
+        left_arm, right_arm = initialize_robot()
 
-        self.shared_state = VuerInput()
-        self.real = real
-        if self.real:
-            left_arm, right_arm = initialize_robot()
+    # Initialize PyBullet
+    p.connect(p.GUI)
+    p.setAdditionalSearchPath(pybullet_data.getDataPath())
+    robot_id = p.loadURDF("urdf/stompy_pro/robot.urdf", [0, 0, 0], useFixedBase=True)
+    p.setGravity(0, 0, -9.81)
 
-        self.shared_data = shared_dict
-        self.update_positions()
-        self.update_shared_data()
+    # Initial goal positions
+    goal_pos_left = np.array([0, 0, 0]) + np.array([0, ROBOT_WIDTH / 2, ROBOT_HEIGHT])
+    goal_pos_right = np.array([0, 0, 0]) + np.array([0, -ROBOT_WIDTH / 2, ROBOT_HEIGHT])
 
-    def update_shared_data(self) -> None:
-        self.shared_data["positions"] = self.get_positions()
-        self.shared_data["velocities"] = self.get_velocities()
-
-
-    def update_positions(self) -> None:
-        if self.robot:
-            self.robot.update_motor_data()
-            pos = self.robot.get_motor_positions()["right_arm"]
-            self.positions = np.array(pos)
-
-    def get_positions(self) -> dict[str, dict[str, NDArray]]:
-        if self.robot:
-            return {
-                "expected": {
-                    "left": np.array(
-                        [
-                            math.degrees(self.q[pos] - self.config["start_q"][pos])
-                            for pos in self.eel_chain_arm + self.eel_chain_hand
-                        ]
-                    ),
-                },
-                "actual": {
-                    "left": self.positions,
-                },
-            }
-        else:
-            return {
-                "expected": {
-                    "left": np.array([math.degrees(self.q[pos]) for pos in self.eel_chain_arm + self.eel_chain_hand]),
-                },
-                "actual": {
-                    "left": np.random.rand(6),
-                },
-            }
-
-    def get_velocities(self) -> Dict[str, NDArray]:
-        return {
-            "left": np.zeros(6),
+    # Load joint info
+    joint_info = {}
+    for i in range(p.getNumJoints(robot_id)):
+        info = p.getJointInfo(robot_id, i)
+        name = info[1].decode("utf-8")
+        joint_info[name] = {
+            "index": i,
+            "lower_limit": info[8],
+            "upper_limit": info[9],
         }
-    
-    def setup_pybullet(self, use_gui: bool, urdf_path: str) -> None:
-        # Initialize PyBullet
-        p.connect(p.GUI if use_gui else p.DIRECT)
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        robot_id = p.loadURDF("urdf/stompy_pro/robot.urdf", [0, 0, 0], useFixedBase=True)
-        p.setGravity(0, 0, -9.81)
 
-        # Initial goal positions
-        goal_pos_left = np.array([0, 0, 0]) + np.array([0, ROBOT_WIDTH / 2, ROBOT_HEIGHT])
-        goal_pos_right = np.array([0, 0, 0]) + np.array([0, -ROBOT_WIDTH / 2, ROBOT_HEIGHT])
+        # Set initial positions
+        if name in initial_positions:
+            p.resetJointState(robot_id, i, initial_positions[name])
 
-        # Load joint info
-        joint_info = {}
-        for i in range(p.getNumJoints(robot_id)):
-            info = p.getJointInfo(robot_id, i)
-            name = info[1].decode("utf-8")
-            joint_info[name] = {
-                "index": i,
-                "lower_limit": info[8],
-                "upper_limit": info[9],
-            }
+    p.resetBasePositionAndOrientation(robot_id, PYBULLET_TRUNK_POSITION, p.getQuaternionFromEuler(PYBULLET_TRUNK_ROTATION))
 
-            # Set initial positions
-            if name in initial_positions:
-                p.resetJointState(robot_id, i, initial_positions[name])
+    p.resetDebugVisualizerCamera(
+        cameraDistance=2.0,
+        cameraYaw=50,
+        cameraPitch=-35,
+        cameraTargetPosition=[0, 0, 1],
+    )
 
-        p.resetBasePositionAndOrientation(robot_id, PYBULLET_TRUNK_POSITION, p.getQuaternionFromEuler(PYBULLET_TRUNK_ROTATION))
+    app = Vuer()
+    shared_state = VuerInput()
 
-        p.resetDebugVisualizerCamera(
-            cameraDistance=2.0,
-            cameraYaw=50,
-            cameraPitch=-35,
-            cameraTargetPosition=[0, 0, 1],
+    @app.add_handler("HAND_MOVE")
+    async def hand_move_wrapper(event: Any, _: Any) -> None:
+        hand_move_handler(event, shared_state)
+
+    @app.spawn(start=True)
+    async def app_main(session: VuerSession) -> None:
+        session.upsert @ PointLight(intensity=10.0, position=[0, 2, 2])
+        session.upsert @ Hands(fps=30, stream=True, key="hands")
+
+        await asyncio.sleep(0.1)
+        session.upsert @ Urdf(
+            src=URDF_WEB,
+            jointValues=initial_positions,
+            position=VUER_TRUNK_POSITION,
+            rotation=VUER_TRUNK_ROTATION,
+            key="robot",
         )
 
-    def run(
-        self,
-        use_gui: bool,
-        max_fps: int,
-        urdf_path: str,
-    ) -> None:
-        self.setup_pybullet(use_gui, urdf_path)
+        counter = 0
 
-        @self.app.add_handler("HAND_MOVE")
-        async def hand_move_wrapper(event: Any, _: Any) -> None:
-            hand_move_handler(event, self.shared_state)
+        while True:
+            process_start = time.time()
+            # Update goal positions based on hand tracking input
+            goal_pos_left = shared_state.left_hand_position
+            goal_pos_right = shared_state.right_hand_position
 
-        @self.app.spawn(start=True)
-        async def app_main(session: VuerSession) -> None:
-            session.upsert @ PointLight(intensity=10.0, position=[0, 2, 2])
-            session.upsert @ Hands(fps=30, stream=True, key="hands")
+            p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.25)
+            p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
 
-            await asyncio.sleep(0.1)
+            if counter % 1 == 0:
+                raw_solution_left = inverse_kinematics("left", goal_pos_left)
+                raw_solution_right = inverse_kinematics("right", goal_pos_right)
+
+                # Apply EMA smoothing
+                shared_state.prev_solution_left = apply_ema(raw_solution_left, shared_state.prev_solution_left)
+                shared_state.prev_solution_right = apply_ema(raw_solution_right, shared_state.prev_solution_right)
+
+                solution_left = shared_state.prev_solution_left
+                solution_right = shared_state.prev_solution_right
+
+            counter += 1
+
+            # Send commands to real robot
+            if args.real:
+                solution_left = np.add(solution_left, SIM_TO_REAL["left"])
+                solution_right = np.add(solution_right, SIM_TO_REAL["right"])
+
+                left_rotation = ((shared_state.left_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX # remaps pinch dist (0 to 0.12) to (-pi/2 to pi/2)
+                right_rotation = ((shared_state.right_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX
+
+                for i, val in enumerate(solution_left):
+                    # Offset by 1 because the motors are 1-indexed
+                    left_arm.set_position(i+1, val)
+
+                for i, val in enumerate(solution_right):
+                    right_arm.set_position(i+1, val)
+
+                left_arm.set_position(5, left_rotation) # wrist pitch
+                right_arm.set_position(5, right_rotation)
+
+            # Update Vuer with the current joint positions
             session.upsert @ Urdf(
                 src=URDF_WEB,
-                jointValues=initial_positions,
+                jointValues={name: p.getJointState(robot_id, joint_info[name]["index"])[0] for name in joint_info},
                 position=VUER_TRUNK_POSITION,
                 rotation=VUER_TRUNK_ROTATION,
                 key="robot",
-        )
+            )
 
-            counter = 0
+            # Sleep to make the simulation more stable
+            await asyncio.sleep(1/60.0)
 
-            while True:
-                # Update goal positions based on hand tracking input
-                goal_pos_left = shared_state.left_hand_position
-                goal_pos_right = shared_state.right_hand_position
-
-                p.addUserDebugPoints([goal_pos_left], [[1, 0, 0]], pointSize=20, lifeTime=0.25)
-                p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
-
-                if counter % 1 == 0:
-                    raw_solution_left = inverse_kinematics("left", goal_pos_left)
-                    raw_solution_right = inverse_kinematics("right", goal_pos_right)
-
-                    # Apply EMA smoothing
-                    shared_state.prev_solution_left = apply_ema(raw_solution_left, shared_state.prev_solution_left)
-                    shared_state.prev_solution_right = apply_ema(raw_solution_right, shared_state.prev_solution_right)
-
-                    solution_left = shared_state.prev_solution_left
-                    solution_right = shared_state.prev_solution_right
-
-                counter += 1
-
-                # Send commands to real robot
-                if self.real:
-                    solution_left = np.add(solution_left, SIM_TO_REAL["left"])
-                    solution_right = np.add(solution_right, SIM_TO_REAL["right"])
-
-                    left_rotation = ((shared_state.left_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX # remaps pinch dist (0 to 0.12) to (-pi/2 to pi/2)
-                    right_rotation = ((shared_state.right_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX
-
-                    for i, val in enumerate(solution_left):
-                        # Offset by 1 because the motors are 1-indexed
-                        left_arm.set_position(i+1, val)
-
-                    for i, val in enumerate(solution_right):
-                        right_arm.set_position(i+1, val)
-
-                    left_arm.set_position(5, left_rotation) # wrist pitch
-                    right_arm.set_position(5, right_rotation)
-
-                # Update Vuer with the current joint positions
-                session.upsert @ Urdf(
-                    src=URDF_WEB,
-                    jointValues={name: p.getJointState(robot_id, joint_info[name]["index"])[0] for name in joint_info},
-                    position=VUER_TRUNK_POSITION,
-                    rotation=VUER_TRUNK_ROTATION,
-                    key="robot",
-                )
-
-                # Sleep to make the simulation more stable
-                await asyncio.sleep(1/frequency)
-
-
-        self.app.run()
-
-
-def run_teleop_app(
-    config: Dict[str, Any],
-    embodiment: str,
-    use_gui: bool,
-    max_fps: int,
-    use_firmware: bool,
-    shared_data: Dict[str, NDArray],
-) -> None:
-    pass
-    # teleop = TeleopRobot(config, embodiment, use_firmware=use_firmware, shared_dict=shared_data)
-    # teleop.run(use_gui, max_fps, config["embodiments"][embodiment]["urdf_local"])
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="PyBullet and Vuer integration for robot control")
-    parser.add_argument("--firmware", action="store_true", help="Enable firmware control")
-    parser.add_argument("--gui", action="store_true", help="Use PyBullet GUI mode")
-    parser.add_argument("--fps", type=int, default=60, help="Maximum frames per second")
-    parser.add_argument("--config", type=str, default="config.yaml", help="Path to configuration file")
-    parser.add_argument(
-        "--embodiment",
-        type=str,
-        default="stompy_mini",
-        choices=["stompy_mini", "stompy"],
-        help="Robot embodiment to use",
-    )
-    args = parser.parse_args()
-
-
-    demo = TeleopRobot(config, args.embodiment, use_firmware=args.firmware)
-    demo.run(args.gui, args.fps, config["embodiments"][args.embodiment]["urdf_local"])
-
-
-if __name__ == "__main__":
-    main()
+    app.run()

@@ -3,7 +3,6 @@
 python collect.py --task_name left_arm
 python collect.py --task_name right_arm
 """
-
 # Based on https://github.com/tonyzhaozh/aloha/blob/main/aloha_scripts/record_episodes.py
 
 import argparse
@@ -224,4 +223,3 @@ if __name__ == "__main__":
     parser.add_argument("--use_firmware", action="store_true", help="Use firmware", default=False)
     parser.add_argument("--save_mp4", action="store_true", help="Save directly to mp4", default=False)
     main(vars(parser.parse_args()))
-    # de
