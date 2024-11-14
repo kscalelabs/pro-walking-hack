@@ -152,15 +152,17 @@ def main(args: Any) -> None:
     shared_data = manager.dict()
     frequency = 60.0
 
-    # teleop_process = multiprocessing.Process(
-    #         target=run_teleop_app, args=(True, frequency, args["use_firmware"], shared_data)
-    # )
     teleop_process = multiprocessing.Process(
-            target=run_teleop_app, args=(True, True)
+        target=run_teleop_app, args=(
+            task_config, "left", True, frequency, args["use_firmware"], shared_data
+        )
     )
+    # teleop_process = multiprocessing.Process(
+    #         target=run_teleop_app, args=(True, True)
+    # )
     teleop_process.start()
 
-    time.sleep(5)
+    time.sleep(2)
 
     while True:
         if args["episode_idx"] is not None:

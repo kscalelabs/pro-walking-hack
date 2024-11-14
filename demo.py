@@ -240,9 +240,27 @@ def apply_ema(current: np.ndarray, previous: np.ndarray, alpha: float = 0.4) -> 
     """Apply Exponential Moving Average smoothing."""
     return alpha * current + (1 - alpha) * previous
 
-def run_teleop_app(real: bool, gui: bool) -> None:
-    """Run the teleop app."""
+
+
+from typing import Dict, Any
+from numpy.typing import NDArray
+
+
+class TeleopRobot:
     pass
+
+
+def run_teleop_app(
+    config: Dict[str, Any],
+    embodiment: str,
+    use_gui: bool,
+    max_fps: int,
+    use_firmware: bool,
+    shared_data: Dict[str, NDArray],
+) -> None:
+    pass
+    # teleop = TeleopRobot(config, embodiment, use_firmware=use_firmware, shared_dict=shared_data)
+    # teleop.run(use_gui, max_fps, config["embodiments"][embodiment]["urdf_local"])
 
 
 if __name__ == "__main__":
