@@ -240,7 +240,7 @@ def apply_ema(current: np.ndarray, previous: np.ndarray, alpha: float = 0.4) -> 
     """Apply Exponential Moving Average smoothing."""
     return alpha * current + (1 - alpha) * previous
 
-def run_teleop_app(args: argparse.Namespace) -> None:
+def run_teleop_app(real: bool, gui: bool) -> None:
     """Run the teleop app."""
     pass
 

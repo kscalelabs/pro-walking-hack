@@ -139,7 +139,6 @@ def main(args: Any) -> None:
         print("Connected camera IDs:", arr)
         return
 
-
     task_config = TASK_CONFIGS[args["task_name"]]
     dataset_dir = task_config["dataset_dir"]
     max_timesteps: int = task_config["episode_len"]
@@ -153,10 +152,12 @@ def main(args: Any) -> None:
     shared_data = manager.dict()
     frequency = 60.0
 
+    # teleop_process = multiprocessing.Process(
+    #         target=run_teleop_app, args=(True, frequency, args["use_firmware"], shared_data)
+    # )
     teleop_process = multiprocessing.Process(
-            target=run_teleop_app, args=(True, frequency, args["use_firmware"], shared_data)
+            target=run_teleop_app, args=(True, True)
     )
-
     teleop_process.start()
 
     time.sleep(5)
