@@ -20,3 +20,5 @@ onnxscript
 
 # Vuer
 vuer==0.0.30
+h5py
+dm_env

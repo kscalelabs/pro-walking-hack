@@ -1,12 +1,19 @@
 """Constants for data collection."""
 
 DATA_DIR = "data"
+# pfb30 this will be default on KBOT and taken from kos
 TASK_CONFIGS: dict[str, dict[str, int | str | list]] = {
     "left_arm": {
         "dataset_dir": DATA_DIR + "/left_arm",
         "episode_len": 300,
         "camera_names": ["/dev/video0"],
         "camera_keys": ["cam1"],
+    },
+    "right_arm": {
+        "dataset_dir": DATA_DIR + "/right_arm",
+        "episode_len": 300,
+        "camera_names": ["/dev/video1"],
+        "camera_keys": ["cam2"],
     },
     "left_arm_mac": {
         "dataset_dir": DATA_DIR + "/left_arm",

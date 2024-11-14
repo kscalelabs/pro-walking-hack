@@ -1,4 +1,8 @@
-"""Script to collect data from a real robot."""
+"""Script to collect data from a real robot.
+
+python collect.py --task_name left_arm
+python collect.py --task_name right_arm
+"""
 
 # Based on https://github.com/tonyzhaozh/aloha/blob/main/aloha_scripts/record_episodes.py
 
@@ -16,13 +20,10 @@ from tqdm import tqdm
 
 from data_collection.constants import CAM_HEIGHT, CAM_WIDTH, DT, TASK_CONFIGS
 from data_collection.util import ImageRecorder
-# pfb30
-# from demo import run_teleop_app
-# TODO: makke env too
-# from env import make_real_env
 
-# pfb30
-from ik import run_teleop_app_with_share_data
+# TODO: make env too
+from env import make_real_env
+from demo import run_teleop_app
 
 
 def capture_one_episode(
@@ -150,9 +151,10 @@ def main(args: Any) -> None:
 
     manager = multiprocessing.Manager()
     shared_data = manager.dict()
+    frequency = 60.0
 
     teleop_process = multiprocessing.Process(
-            target=run_teleop_app, args=(True, 60, args["use_firmware"], shared_data)
+            target=run_teleop_app, args=(True, frequency, args["use_firmware"], shared_data)
     )
 
     teleop_process.start()
@@ -222,4 +224,4 @@ if __name__ == "__main__":
     parser.add_argument("--use_firmware", action="store_true", help="Use firmware", default=False)
     parser.add_argument("--save_mp4", action="store_true", help="Save directly to mp4", default=False)
     main(vars(parser.parse_args()))
-    # debug()
+    # de

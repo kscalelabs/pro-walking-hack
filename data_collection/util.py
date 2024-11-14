@@ -132,22 +132,30 @@ class ImageRecorder:
 
 # Example usage:
 if __name__ == "__main__":
-    recorder = ImageRecorder([0, 1, 2, 3], ["cam1", "cam2", "cam3", "cam4"])  # Use cameras 0, 1, 2, and 3
+    recorder = ImageRecorder([0], ["cam2"], save_mp4=True)  # Use camera 0
+    recorder.set_save_path("camera_test")
 
     try:
-        while True:
+        start_time = time.time()
+        duration = 4.0  # Record for 4 seconds
+        
+        while (time.time() - start_time) < duration:
             frames = recorder.get_images()
 
             for camera_id, frame in frames.items():
-                if frame is not None:
-                    cv2.imshow(f"Camera {camera_id}", frame)
+                print(frame.shape)
+                # if frame is not None:
+                #     cv2.imshow(f"Camera {camera_id}", frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
+        print(f"Finished recording {duration} seconds of video")
+
     except KeyboardInterrupt:
-        pass
+        print("Recording interrupted")
 
     finally:
         recorder.print_diagnostics()
+        recorder.close()  # Close video writers
         cv2.destroyAllWindows()
