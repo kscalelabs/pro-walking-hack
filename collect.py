@@ -157,9 +157,6 @@ def main(args: Any) -> None:
             task_config, "left", True, frequency, args["use_firmware"], shared_data
         )
     )
-    # teleop_process = multiprocessing.Process(
-    #         target=run_teleop_app, args=(True, True)
-    # )
     teleop_process.start()
 
     time.sleep(2)
