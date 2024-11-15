@@ -398,10 +398,7 @@ class TeleopRobot:
             print("upsert")
 
             # Sleep to make the simulation more stable
-            # time.sleep(1 / self.frequency)
             await asyncio.sleep(1 / self.frequency)
-
-        # self.app.run()
 
     def run(
         self,
