@@ -108,7 +108,6 @@ class VuerInput:
     prev_solution_right: np.ndarray = field(default_factory=lambda: np.zeros(4))
 
 
-
 def inverse_kinematics(arm: str, goal_pos: np.ndarray, robot_id: int, joint_info) -> np.ndarray:
     """Performs inverse kinematics for the given arm."""
     ee_id = joint_info[EEL_JOINT if arm == "left" else EER_JOINT]["index"]
@@ -165,6 +164,7 @@ def inverse_kinematics(arm: str, goal_pos: np.ndarray, robot_id: int, joint_info
     else:
         return np.array(solution[4:])
 
+
 def hand_move_handler(event: Any, shared_state: VuerInput) -> None:
     """Handle hand movement events from Vuer."""
     # Right hand
@@ -196,11 +196,9 @@ def apply_ema(current: np.ndarray, previous: np.ndarray, alpha: float = 0.4) -> 
 
 
 class TeleopRobot:
-    def __init__(
-        self, real: bool = False, shared_dict: dict = {}
-    ) -> None:
+    def __init__(self, real: bool = False, shared_dict: dict = {}, frequency: int = 60) -> None:
         self.app = Vuer()
-
+        self.frequency = frequency
         self.shared_state = VuerInput()
         self.real = real
         if self.real:
@@ -271,24 +269,21 @@ class TeleopRobot:
         # self.update_shared_data()
 
     def update_shared_data(self) -> None:
-        self.shared_data["positions"] = self.get_positions()
-        self.shared_data["velocities"] = self.get_velocities()
+        if self.real:
+            self.shared_data["positions"] = self.get_positions()
+            self.shared_data["velocities"] = self.get_velocities()
 
     def get_positions(self) -> dict[str, dict[str, NDArray]]:
-        solution_left = np.add(solution_left, SIM_TO_REAL["left"])
-        solution_right = np.add(solution_right, SIM_TO_REAL["right"])
+        num_motors = 5
+        positions = np.zeros(num_motors)
 
-        left_rotation = ((self.shared_state.left_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX # remaps pinch dist (0 to 0.12) to (-pi/2 to pi/2)
-        right_rotation = ((self.shared_state.right_hand_pinch_dist / MAX_PINCH_DIST) - 0.5) * ROTATION_MAX
-
-        for i, val in enumerate(solution_left):
+        for i in range(num_motors):
             # Offset by 1 because the motors are 1-indexed
-            self.left_arm.get_position(i+1)
+            positions[i] = self.left_arm.get_position(i+1)
 
-        # TODO update
-        for i, val in enumerate(solution_right):
-            self.right_arm.get_position(i+1)
-
+        # TODO pfb30 update
+        for i in range(num_motors):
+            positions[i] = self.right_arm.get_position(i+1)
 
     def get_velocities(self) -> Dict[str, NDArray]:
         return {
@@ -339,7 +334,11 @@ class TeleopRobot:
             if name in initial_positions:
                 p.resetJointState(self.robot_id, i, initial_positions[name])
 
-        p.resetBasePositionAndOrientation(self.robot_id, PYBULLET_TRUNK_POSITION, p.getQuaternionFromEuler(PYBULLET_TRUNK_ROTATION))
+        p.resetBasePositionAndOrientation(
+            self.robot_id,
+            PYBULLET_TRUNK_POSITION,
+            p.getQuaternionFromEuler(PYBULLET_TRUNK_ROTATION)
+        )
 
         p.resetDebugVisualizerCamera(
             cameraDistance=2.0,
@@ -348,26 +347,10 @@ class TeleopRobot:
             cameraTargetPosition=[0, 0, 1],
         )
 
-    def run(
-        self,
-        use_gui: bool,
-        max_fps: int,
-    ) -> None:
-        self.setup_pybullet(use_gui)
-
-        @self.app.add_handler("HAND_MOVE")
-        async def hand_move_wrapper(event: Any, _: Any) -> None:
-            hand_move_handler(event, self.shared_state)
-
-        @self.app.spawn(start=True)
-        async def app_main(session: VuerSession) -> None:
-            await self.main_loop(session)
-
     async def main_loop(self, session: VuerSession) -> None:
         session.upsert @ PointLight(intensity=10.0, position=[0, 2, 2])
         session.upsert @ Hands(fps=30, stream=True, key="hands")
 
-        await asyncio.sleep(0.1)
         session.upsert @ Urdf(
             src=URDF_WEB,
             jointValues=initial_positions,
@@ -377,7 +360,6 @@ class TeleopRobot:
         )
 
         counter = 0
-
         while True:
             # Update goal positions based on hand tracking input
             goal_pos_left = self.shared_state.left_hand_position
@@ -387,6 +369,7 @@ class TeleopRobot:
             p.addUserDebugPoints([goal_pos_right], [[0, 0, 1]], pointSize=20, lifeTime=0.25)
 
             if counter % 1 == 0:
+                print("IK")
                 raw_solution_left = inverse_kinematics("left", goal_pos_left, self.robot_id, self.joint_info)
                 raw_solution_right = inverse_kinematics("right", goal_pos_right, self.robot_id, self.joint_info)
 
@@ -412,11 +395,28 @@ class TeleopRobot:
                 rotation=VUER_TRUNK_ROTATION,
                 key="robot",
             )
+            print("upsert")
 
             # Sleep to make the simulation more stable
-            await asyncio.sleep(1/self.frequency)
+            # time.sleep(1 / self.frequency)
+            await asyncio.sleep(1 / self.frequency)
 
         # self.app.run()
+
+    def run(
+        self,
+        use_gui: bool,
+        max_fps: int,
+    ) -> None:
+        self.setup_pybullet(use_gui)
+
+        @self.app.add_handler("HAND_MOVE")
+        async def hand_move_wrapper(event: Any, _: Any) -> None:
+            hand_move_handler(event, self.shared_state)
+
+        @self.app.spawn(start=True)
+        async def app_main(session: VuerSession) -> None:
+            await self.main_loop(session)
 
 
 def run_teleop_app(
