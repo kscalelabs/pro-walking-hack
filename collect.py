@@ -1,5 +1,7 @@
 """Script to collect data from a real robot.
 
+export DISPLAY=:0
+
 python collect.py --task_name left_arm
 python collect.py --task_name right_arm
 """
