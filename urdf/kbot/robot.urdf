@@ -1,0 +1,585 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="000-robot-motor-assy-1111(2).SLDASM">
+  <link name="body_base">
+    <inertial>
+      <origin xyz="-0.00168899998099162 -4.75006958047743E-05 0.234566501307181" rpy="0 0 0" />
+      <mass value="7.14613288528762" />
+      <inertia ixx="0.0534088175979788" ixy="-4.6593132287917E-06" ixz="-0.000150986340576492" iyy="0.0268998415195477" iyz="-5.36719189752182E-05" izz="0.0344841145104636" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/body_base.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/body_base.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <link name="L_buttock">
+    <inertial>
+      <origin xyz="-0.00819709342840121 0.000318208662025143 0.00252304988190288" rpy="0 0 0" />
+      <mass value="0.716812635857969" />
+      <inertia ixx="0.00128014305666732" ixy="-1.43073173567848E-05" ixz="2.90385709713522E-06" iyy="0.000912114057281933" iyz="-1.10748343344497E-07" izz="0.000793918800875051" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_buttock.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_buttock.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_hip_y" type="continuous">
+    <origin xyz="0.00525 -0.1572 0" rpy="-1.5707963267949 0.0387975271824028 0" />
+    <parent link="body_base" />
+    <child link="L_buttock" />
+    <axis xyz="0 0 1" />
+    </joint>
+  <link name="L_leg">
+    <inertial>
+      <origin xyz="-0.002974071662666 0.0999923667862714 -0.00460277301524567" rpy="0 0 0" />
+      <mass value="0.922507051557688" />
+      <inertia ixx="0.00138275283840285" ixy="0.000156614413733596" ixz="-4.48198972624635E-06" iyy="0.00101558782916254" iyz="4.78607063861617E-06" izz="0.00138863041261466" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_leg.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_leg.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_hip_x" type="continuous">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="L_buttock" />
+    <child link="L_leg" />
+    <axis xyz="0.999247470344691 -0.0387877945974834 0" />
+    </joint>
+  <link name="L_thigh">
+    <inertial>
+      <origin xyz="-0.152975413159304 9.16682550709896E-07 -0.00192310101177517" rpy="0 0 0" />
+      <mass value="0.79742290295527" />
+      <inertia ixx="0.000928367022232089" ixy="4.72987865403325E-08" ixz="-5.04802948364781E-05" iyy="0.00170898550375536" iyz="4.19086194081958E-09" izz="0.00226111074590077" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_thigh.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_thigh.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_hip_z" type="continuous">
+    <origin xyz="0 0.135351856285756 0" rpy="0 0 -1.6095938539773" />
+    <parent link="L_leg" />
+    <child link="L_thigh" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="L_calf">
+    <inertial>
+      <origin xyz="-0.00221218926913685 0.128163697364005 -0.0015812007547766" rpy="0 0 0" />
+      <mass value="1.01514022161973" />
+      <inertia ixx="0.00569735691747697" ixy="0.000510336798374669" ixz="8.14248940411012E-06" iyy="0.000646036105963076" iyz="6.00188035468464E-05" izz="0.00538781385244594" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_calf.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_calf.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_knee" type="continuous">
+    <origin xyz="-0.16475 0 0.00650000000000001" rpy="1.5707963267949 -1.55913018940663 0" />
+    <parent link="L_thigh" />
+    <child link="L_calf" />
+    <axis xyz="-0.999931951391002 -0.0116658727656043 0" />
+    </joint>
+  <link name="L_foot">
+    <inertial>
+      <origin xyz="-0.00479857742210568 -0.00929240520893895 -0.0174522370875667" rpy="0 0 0" />
+      <mass value="0.458834684807861" />
+      <inertia ixx="0.00140894155586573" ixy="-1.56888789287836E-05" ixz="2.5835729594436E-06" iyy="0.000629108468710886" iyz="-0.000136816296117936" izz="0.00104065859956583" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_foot.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_foot.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_ankle_y" type="continuous">
+    <origin xyz="0 0.300020415972035 0" rpy="1.57079632678526 0 -3.12992651620125" />
+    <parent link="L_calf" />
+    <child link="L_foot" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_buttock">
+    <inertial>
+      <origin xyz="0.00251606934185414 1.91491693335433E-09 0.00298061791756007" rpy="0 0 0" />
+      <mass value="0.717874293135761" />
+      <inertia ixx="0.000795076262097125" ixy="-2.58472142403005E-09" ixz="-2.80455504085126E-06" iyy="0.000912888945648462" iyz="-1.64876298053934E-10" izz="0.00128256631531027" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_buttock.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_buttock.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_hip_y" type="continuous">
+    <origin xyz="0 0.1572 0" rpy="1.5707963267949 0 -1.5707963267949" />
+    <parent link="body_base" />
+    <child link="R_buttock" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_hip">
+    <inertial>
+      <origin xyz="-0.00456993713036508 -0.0990892676971906 0.00186098370201654" rpy="0 0 0" />
+      <mass value="0.929140993419456" />
+      <inertia ixx="0.00139088984393278" ixy="-4.60842122590297E-06" ixz="4.66471347125917E-06" iyy="0.00103053675428894" iyz="0.000170373265670053" izz="0.00137453266270548" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_hip.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_hip.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_hip_x" type="continuous">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="R_buttock" />
+    <child link="R_hip" />
+    <axis xyz="0 0 1" />
+    </joint>
+  <link name="R_thigh">
+    <inertial>
+      <origin xyz="-0.153001423082827 -9.16713577793342E-07 -0.00195251154509687" rpy="0 0 0" />
+      <mass value="0.798828442920692" />
+      <inertia ixx="0.000930131700251728" ixy="6.35059492463892E-08" ixz="-5.09593709107673E-05" iyy="0.00171269143605417" iyz="1.97243744432103E-08" izz="0.00226615534608931" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_thigh.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_thigh.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_hip_z" type="continuous">
+    <origin xyz="0 -0.13525 0" rpy="1.5707963267949 0 1.5707963267949" />
+    <parent link="R_hip" />
+    <child link="R_thigh" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_calf">
+    <inertial>
+      <origin xyz="0.00209422858068073 0.12765174288707 -0.000719675140198883" rpy="0 0 0" />
+      <mass value="1.01528348745858" />
+      <inertia ixx="0.00569392011117491" ixy="-0.000530849224726063" ixz="-9.11057696682531E-07" iyy="0.000651162656583077" iyz="5.80759879743668E-05" izz="0.00538640134761818" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_calf.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_calf.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_knee" type="continuous">
+    <origin xyz="-0.16475 0 0.00650000000000001" rpy="1.5707963267949 1.55579745164248 3.14159265358946" />
+    <parent link="R_thigh" />
+    <child link="R_calf" />
+    <axis xyz="-0.999887518980808 0.0149983127852693 0" />
+    </joint>
+  <link name="R_foot">
+    <inertial>
+      <origin xyz="-0.00368888331082423 -0.0203246465649679 -0.0179364027336445" rpy="0 0 0" />
+      <mass value="0.550460500946463" />
+      <inertia ixx="0.00178454226431903" ixy="-2.89108031455454E-05" ixz="-2.44610136506864E-06" iyy="0.000242083665010052" iyz="-1.22384833454679E-05" izz="0.00195782985486807" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_foot.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_foot.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_ankle_y" type="continuous">
+    <origin xyz="0 0.300033748101774 0" rpy="1.57079632679433 0 -0.0149988751526712" />
+    <parent link="R_calf" />
+    <child link="R_foot" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="L_clav">
+    <inertial>
+      <origin xyz="-0.00204971076662924 -2.52850121296166E-06 -0.000143593484141204" rpy="0 0 0" />
+      <mass value="0.556580211071974" />
+      <inertia ixx="0.000541431489019214" ixy="-8.47391309131692E-08" ixz="9.8097944969726E-06" iyy="0.000590741903833593" iyz="1.19695034926888E-08" izz="0.00091874948055789" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_clav.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_clav.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_shoulder_y" type="continuous">
+    <origin xyz="0.000261964373661255 -0.255 0.4500562784516" rpy="1.5707963267949 0 -1.5707963267949" />
+    <parent link="body_base" />
+    <child link="L_clav" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="L_scapula">
+    <inertial>
+      <origin xyz="0.00483000082259566 -0.0920797143660979 -0.005822542051574" rpy="0 0 0" />
+      <mass value="0.413785106055008" />
+      <inertia ixx="0.000436000953006356" ixy="1.75298963919669E-06" ixz="-3.56190480531948E-08" iyy="0.000296561627941788" iyz="7.70859507519229E-05" izz="0.000399427554871515" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_scapula.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_scapula.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_shoulder_x" type="continuous">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="L_clav" />
+    <child link="L_scapula" />
+    <axis xyz="0 0 -1" />
+    </joint>
+  <link name="L_uarm">
+    <inertial>
+      <origin xyz="-0.10163579177938 0.00377324438002548 -4.03410402005644E-06" rpy="0 0 0" />
+      <mass value="0.277293520071397" />
+      <inertia ixx="0.000146051204275245" ixy="1.18418123095809E-05" ixz="-1.2833281618558E-08" iyy="0.000404910973903621" iyz="-9.16450363895225E-08" izz="0.000319519397766818" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_uarm.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_uarm.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_shoulder_z" type="continuous">
+    <origin xyz="0 -0.114 0.000249999999999991" rpy="1.57186970427954 0 1.5707963267949" />
+    <parent link="L_scapula" />
+    <child link="L_uarm" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="L_farm">
+    <inertial>
+      <origin xyz="-0.00038437188890313 0.126015259322794 3.32331253788398E-06" rpy="0 0 0" />
+      <mass value="0.333434347202915" />
+      <inertia ixx="0.000593803796844833" ixy="8.41837354749469E-05" ixz="-9.13261797393152E-10" iyy="0.000240487078579545" iyz="-6.18128406949607E-08" izz="0.000605414769156374" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_farm.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_farm.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_elbow_x" type="continuous">
+    <origin xyz="-0.1155 0.00349999798375651 0" rpy="0 0.0010733774846464 1.5707963267949" />
+    <parent link="L_uarm" />
+    <child link="L_farm" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="L_finger">
+    <inertial>
+      <origin xyz="-0.108721956202611 -0.000612166557969074 4.7482908061669E-05" rpy="0 0 0" />
+      <mass value="0.910556246110491" />
+      <inertia ixx="0.00101572276497394" ixy="1.92362650516359E-05" ixz="3.91779241713697E-07" iyy="0.000760514975458036" iyz="3.28199815524034E-06" izz="0.001388715541467" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_finger.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/L_finger.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="L_hand_x" type="continuous">
+    <origin xyz="-0.00399999999999974 0.164 0" rpy="0.00107337749648937 0 -1.5707963267949" />
+    <parent link="L_farm" />
+    <child link="L_finger" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_clav">
+    <inertial>
+      <origin xyz="0.000405521407119671 0.00204974123027379 -5.37452159433682E-05" rpy="0 0 0" />
+      <mass value="0.556581229681906" />
+      <inertia ixx="0.000918749741821717" ixy="9.810826732849E-06" ixz="1.16981744373477E-08" iyy="0.000541432147974882" iyz="-8.47945687226876E-08" izz="0.000590741595741098" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_clav.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_clav.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_shoulder_y" type="continuous">
+    <origin xyz="0 0.255 0.45" rpy="3.14159265358979 0 0" />
+    <parent link="body_base" />
+    <child link="R_clav" />
+    <axis xyz="0 -1 0" />
+    </joint>
+  <link name="R_scapula">
+    <inertial>
+      <origin xyz="0.00608814555196597 -0.004830134839302 0.0920232459747324" rpy="0 0 0" />
+      <mass value="0.413787999130544" />
+      <inertia ixx="0.000399429459425611" ixy="-4.55289355459629E-08" ixz="7.70829133188421E-05" iyy="0.000436002099519034" iyz="1.75380337901809E-06" izz="0.000296563380894703" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_scapula.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_scapula.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_shoulder_x" type="continuous">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="R_clav" />
+    <child link="R_scapula" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_uarm">
+    <inertial>
+      <origin xyz="-0.102135713901053 -0.00377319271402149 -4.05228474770203E-06" rpy="0 0 0" />
+      <mass value="0.277294237289419" />
+      <inertia ixx="0.000146051525972404" ixy="-1.18420163495658E-05" ixz="-1.26703333537544E-08" iyy="0.00040491146644268" iyz="9.1647744515803E-08" izz="0.000319519768287632" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_uarm.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_uarm.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_shoulder_z" type="continuous">
+    <origin xyz="1.19643736613643E-05 0 0.113943721548401" rpy="1.56972294932056 1.5707963267949 0" />
+    <parent link="R_scapula" />
+    <child link="R_uarm" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_farm">
+    <inertial>
+      <origin xyz="-0.00346386776846992 0.125742816389133 7.82442342028844E-08" rpy="0 0 0" />
+      <mass value="0.344651145281826" />
+      <inertia ixx="0.00062811911276093" ixy="-8.66949561502986E-05" ixz="-5.89280156791326E-10" iyy="0.000256184138709623" iyz="1.23385046815639E-11" izz="0.000644697211656041" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_farm.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_farm.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_elbow_x" type="continuous">
+    <origin xyz="-0.116 0 0" rpy="0 -0.00107337747433267 1.5707963267949" />
+    <parent link="R_uarm" />
+    <child link="R_farm" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  <link name="R_finger">
+    <inertial>
+      <origin xyz="-0.109089592682188 0.000191477169552701 -0.000716371040221293" rpy="0 0 0" />
+      <mass value="0.778168015229575" />
+      <inertia ixx="0.0009586594975781" ixy="4.12416028505325E-07" ixz="1.92357889467291E-05" iyy="0.00132993739103914" iyz="2.62391954791746E-06" izz="0.000757572160591468" />
+      </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_finger.STL" />
+        </geometry>
+      <material name="">
+        <color rgba="1 1 1 1" />
+        </material>
+      </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/R_finger.STL" />
+        </geometry>
+      </collision>
+    </link>
+  <joint name="R_hand_x" type="continuous">
+    <origin xyz="0 0.164 0" rpy="1.5707963267949 0 -1.5707963267949" />
+    <parent link="R_farm" />
+    <child link="R_finger" />
+    <axis xyz="-1 0 0" />
+    </joint>
+  </robot>
