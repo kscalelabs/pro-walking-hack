@@ -24,8 +24,8 @@ class RealPPOController:
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, -1])
 
-        self.left_arm_ids = [11, 12, 13, 14, 15, 16]
-        self.right_arm_ids = [21, 22, 23, 24, 25, 26]
+        self.left_arm_ids = [11, 12, 13, 14, 15]#, 16]
+        self.right_arm_ids = [21, 22, 23, 24, 25]#, 26]
         self.left_leg_ids = [31, 32, 33, 34, 35]
         self.right_leg_ids = [41, 42, 43, 44, 45]
 
@@ -37,13 +37,13 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=1, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=80, kd=2, torque_enabled=True)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=1, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=80, kd=2, torque_enabled=True)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=30, kd=1, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=1, torque_enabled=True)
 
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -63,6 +63,8 @@ class RealPPOController:
         self.right_offsets = -1 * np.array(self.model_info["default_standing"][5:])
 
         self.offsets = np.concatenate([self.left_offsets, self.right_offsets])
+
+        print(f"Offsets: {self.offsets}")
         
         # Initialize input state with dynamic sizes from metadata
         self.input_data = {
@@ -84,8 +86,8 @@ class RealPPOController:
         
         # Walking command defaults
         self.command = {
-            "x_vel": 0.4,
-            "y_vel": 0.0,
+            "x_vel": 0.1,
+            "y_vel": 0.5,
             "rot": 0.0,
         }
 
@@ -112,31 +114,35 @@ class RealPPOController:
         angles[angles > np.pi] -= 2 * np.pi
         angles[angles < -np.pi] += 2 * np.pi
 
-        motor_feedback = self.kos.get_actuator_states(self.all_ids)
+        motor_feedback = self.kos.actuator.get_actuators_state(self.all_ids)
 
         # Create dictionary of motor feedback to motor id
-        motor_feedback_dict = {
+        self.motor_feedback_dict = {
             motor.actuator_id: motor for motor in motor_feedback
         }
 
         # Check that each motor is enabled
-        for motor in motor_feedback_dict.values():
-            if not motor.online:
+        for motor in self.motor_feedback_dict.values():
+            if not motor.online and motor.actuator_id in self.left_leg_ids + self.right_leg_ids:
                 raise RuntimeError(f"Motor {motor.actuator_id} is not online")
         
         # Should be arranged left to right, top to bottom
         joint_positions = np.concatenate([
-            np.array([motor_feedback_dict[id].position for id in self.left_leg_ids]),
-            np.array([motor_feedback_dict[id].position for id in self.right_leg_ids])
+            np.array([self.motor_feedback_dict[id].position for id in self.left_leg_ids]),
+            np.array([self.motor_feedback_dict[id].position for id in self.right_leg_ids])
         ])
+
+        joint_positions = np.deg2rad(joint_positions)
 
         joint_positions -= self.offsets
 
         joint_velocities = np.concatenate([
-            np.array([motor_feedback_dict[id].velocity for id in self.left_leg_ids]),
-            np.array([motor_feedback_dict[id].velocity for id in self.right_leg_ids])
+            np.array([self.motor_feedback_dict[id].velocity for id in self.left_leg_ids]),
+            np.array([self.motor_feedback_dict[id].velocity for id in self.right_leg_ids])
         ])
-        
+
+        joint_velocities = np.deg2rad(joint_velocities)
+    
         # Multiply positions and velocities by -1 because sim is ccw+ and real is cw+
         joint_positions = -joint_positions
         joint_velocities = -joint_velocities
@@ -186,10 +192,24 @@ class RealPPOController:
         # Clip positions for safety
         positions = np.clip(positions, -0.5, 0.5)
 
+        # For moving to default standing position
+        positions = np.zeros_like(positions)
+
         real_positions = positions + self.offsets
 
         # Multiply positions by -1 because sim is ccw+ and real is cw+
         real_positions = -real_positions
+
+        # Convert to degrees
+        real_positions = np.rad2deg(real_positions)
+
+        # Calculate position error (actual - desired)
+        current_positions = np.concatenate([
+            np.array([self.motor_feedback_dict[id].position for id in self.left_leg_ids]),
+            np.array([self.motor_feedback_dict[id].position for id in self.right_leg_ids])
+        ])
+        position_error = current_positions - real_positions
+        print(f"Position error (deg): {position_error}")
 
         # Send positions to robot
         self.move_actuators(real_positions)
@@ -198,14 +218,20 @@ class RealPPOController:
 
 def main():
     controller = RealPPOController(model_path="light_walking.onnx")
-    # dt = 0.01 # 100Hz
-    dt = 0.5 # Slow frequency for debugging
-    while True:
-        loop_start_time = time.time()
-        controller.step(dt)
-        loop_end_time = time.time()
-        sleep_time = max(0, dt - (loop_end_time - loop_start_time))
-        time.sleep(sleep_time)
+    dt = 0.01 # 100Hz
+    # dt = 0.1 # Slow frequency for debugging
+    try:
+        while True:
+            loop_start_time = time.time()
+            controller.step(dt)
+            loop_end_time = time.time()
+            sleep_time = max(0, dt - (loop_end_time - loop_start_time))
+            time.sleep(sleep_time)
+    except KeyboardInterrupt:
+        print("Exiting...")
+    finally:
+        controller.kos.close()
+
 
 if __name__ == "__main__":
     main()
