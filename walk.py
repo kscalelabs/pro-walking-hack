@@ -8,10 +8,42 @@ class RealPPOController:
     def __init__(self):
         self.kos = pykos.KOS()
         self.kinfer = ONNXModel("model.onnx")
+
+        # Get model metadata
+        metadata = self.kinfer.get_metadata()
+        self.model_info = {
+            "num_actions": metadata["num_actions"],
+            "num_observations": metadata["num_observations"],
+            "robot_effort": metadata["robot_effort"],
+            "robot_stiffness": metadata["robot_stiffness"],
+            "robot_damping": metadata["robot_damping"],
+            "default_standing": metadata["default_standing"],
+        }
         
         # Add IMU initialization
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, -1])
+
+        self.left_arm_ids = [11, 12, 13, 14, 15, 16]
+        self.right_arm_ids = [21, 22, 23, 24, 25, 26]
+        self.left_leg_ids = [31, 32, 33, 34, 35]
+        self.right_leg_ids = [41, 42, 43, 44, 45]
+
+        self.type_four_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [0, 3]]
+        self.type_three_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [1, 2]]
+        self.type_two_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [4]]
+
+        self.all_ids = self.left_arm_ids + self.right_arm_ids + self.left_leg_ids + self.right_leg_ids
+
+        # Configure all motors
+        for id in self.type_four_ids:
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=1, torque_enabled=True)
+
+        for id in self.type_three_ids:
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=1, torque_enabled=True)
+
+        for id in self.type_two_ids:
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=30, kd=1, torque_enabled=True)
 
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -25,35 +57,12 @@ class RealPPOController:
         self.angular_offset = np.mean(angles, axis=0)
         print(f"IMU offset calculated: {self.angular_offset}")
 
-        left_offsets = np.array(
-            [0.0,
-             0.0,
-             0.0,
-             0.0, 
-             0.0])
+        # Negate default standing offsets because sim is ccw+ and real is cw+
+        self.left_offsets = -1 * np.array(self.model_info["default_standing"][:5])
 
-        right_offsets = np.array([0.0,
-                                 0.0,
-                                 0.0,
-                                 0.0,
-                                 0.0])
+        self.right_offsets = -1 * np.array(self.model_info["default_standing"][5:])
 
-        self.offsets = left_offsets + right_offsets
-        '''
-        ip link set can0 down
-        ip link set can0 type can bitrate 1000000
-        ip link set can0 txqueuelen 1000
-        ip link set can0 up
-'''
-        # Get model metadata
-        metadata = self.kinfer.get_metadata()
-        self.model_info = {
-            "num_actions": metadata["num_actions"],
-            "num_observations": metadata["num_observations"],
-            "robot_effort": metadata["robot_effort"],
-            "robot_stiffness": metadata["robot_stiffness"],
-            "robot_damping": metadata["robot_damping"],
-        }
+        self.offsets = np.concatenate([self.left_offsets, self.right_offsets])
         
         # Initialize input state with dynamic sizes from metadata
         self.input_data = {
@@ -81,9 +90,7 @@ class RealPPOController:
         }
 
     def update_robot_state(self):
-        """Update input data from robot sensors"""
-        motor_feedback = self.kos.get_actuator_states()
-        
+        """Update input data from robot sensors"""        
         # Get IMU data
         imu_data = self.imu_reader.get_data()
         
@@ -105,26 +112,35 @@ class RealPPOController:
         angles[angles > np.pi] -= 2 * np.pi
         angles[angles < -np.pi] += 2 * np.pi
 
+        motor_feedback = self.kos.get_actuator_states(self.all_ids)
 
         # Create dictionary of motor feedback to motor id
         motor_feedback_dict = {
-            motor["id"]: motor for motor in motor_feedback
+            motor.actuator_id: motor for motor in motor_feedback
         }
 
         # Check that each motor is enabled
-        for motor in motor_feedback:
-            if not motor["enabled"]:
-                raise RuntimeError(f"Motor {motor['name']} is not enabled")
-
+        for motor in motor_feedback_dict.values():
+            if not motor.online:
+                raise RuntimeError(f"Motor {motor.actuator_id} is not online")
+        
         # Should be arranged left to right, top to bottom
-        joint_positions = np.array([
-            motor["position"] for motor in motor_feedback
+        joint_positions = np.concatenate([
+            np.array([motor_feedback_dict[id].position for id in self.left_leg_ids]),
+            np.array([motor_feedback_dict[id].position for id in self.right_leg_ids])
         ])
 
-        joint_velocities = np.array([
-            motor["velocity"] for motor in motor_feedback
+        joint_positions -= self.offsets
+
+        joint_velocities = np.concatenate([
+            np.array([motor_feedback_dict[id].velocity for id in self.left_leg_ids]),
+            np.array([motor_feedback_dict[id].velocity for id in self.right_leg_ids])
         ])
         
+        # Multiply positions and velocities by -1 because sim is ccw+ and real is cw+
+        joint_positions = -joint_positions
+        joint_velocities = -joint_velocities
+
         # Update input dictionary
         self.input_data["dof_pos.1"] = joint_positions.astype(np.float32)
         self.input_data["dof_vel.1"] = joint_velocities.astype(np.float32)
@@ -138,7 +154,15 @@ class RealPPOController:
         left_positions = positions[:5]
         right_positions = positions[5:]
 
-        # Send positions to robot
+        actuator_commands = []
+
+        for id, position in zip(self.left_leg_ids, left_positions):
+            actuator_commands.append({"actuator_id": id, "position": position})
+
+        for id, position in zip(self.right_leg_ids, right_positions):
+            actuator_commands.append({"actuator_id": id, "position": position})
+
+        self.kos.actuator.command_actuators(actuator_commands)
 
     def step(self, dt):
         """Run one control step"""
@@ -163,6 +187,10 @@ class RealPPOController:
         positions = np.clip(positions, -0.5, 0.5)
 
         real_positions = positions + self.offsets
+
+        # Multiply positions by -1 because sim is ccw+ and real is cw+
+        real_positions = -real_positions
+
         # Send positions to robot
         self.move_actuators(real_positions)
         return positions
