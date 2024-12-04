@@ -7,6 +7,21 @@ class RealPPOController:
     def __init__(self):
         self.kos = pykos.KOS()
         self.kinfer = ONNXModel("model.onnx")
+
+        left_offsets = np.array(
+            [0.0,
+             0.0,
+             0.0,
+             0.0, 
+             0.0])
+
+        right_offsets = np.array([0.0,
+                                 0.0,
+                                 0.0,
+                                 0.0,
+                                 0.0])
+
+        self.offsets = left_offsets + right_offsets
         
         # Get model metadata
         metadata = self.kinfer.get_metadata()
@@ -108,8 +123,9 @@ class RealPPOController:
         # Clip positions for safety
         positions = np.clip(positions, -0.5, 0.5)
 
+        real_positions = positions + self.offsets
         # Send positions to robot
-        self.move_actuators(positions)
+        self.move_actuators(real_positions)
         return positions
 
 
