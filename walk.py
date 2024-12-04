@@ -5,9 +5,9 @@ from kinfer.inference import ONNXModel
 from imu import HexmoveImuReader
 
 class RealPPOController:
-    def __init__(self):
+    def __init__(self, model_path: str):
         self.kos = pykos.KOS()
-        self.kinfer = ONNXModel("model.onnx")
+        self.kinfer = ONNXModel(model_path)
 
         # Get model metadata
         metadata = self.kinfer.get_metadata()
@@ -197,8 +197,9 @@ class RealPPOController:
 
 
 def main():
-    controller = RealPPOController()
-    dt = 0.01 # 100Hz
+    controller = RealPPOController(model_path="light_walking.onnx")
+    # dt = 0.01 # 100Hz
+    dt = 0.5 # Slow frequency for debugging
     while True:
         loop_start_time = time.time()
         controller.step(dt)
