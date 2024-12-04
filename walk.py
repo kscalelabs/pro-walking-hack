@@ -39,7 +39,12 @@ class RealPPOController:
                                  0.0])
 
         self.offsets = left_offsets + right_offsets
-        
+        '''
+        ip link set can0 down
+        ip link set can0 type can bitrate 1000000
+        ip link set can0 txqueuelen 1000
+        ip link set can0 up
+'''
         # Get model metadata
         metadata = self.kinfer.get_metadata()
         self.model_info = {
