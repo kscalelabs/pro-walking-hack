@@ -2,11 +2,28 @@ import time
 import pykos
 import numpy as np
 from kinfer.inference import ONNXModel
+from imu import HexmoveImuReader
 
 class RealPPOController:
     def __init__(self):
         self.kos = pykos.KOS()
         self.kinfer = ONNXModel("model.onnx")
+        
+        # Add IMU initialization
+        self.imu_reader = HexmoveImuReader("can0", 1, 1)
+        self.euler_signs = np.array([-1, -1, -1])
+
+        # Calculate initial IMU offset as running average over 5 seconds
+        num_samples = 50  # 10 Hz for 5 seconds
+        angles = []
+        print("Calculating IMU offset...")
+        for _ in range(num_samples):
+            imu_data = self.imu_reader.get_data()
+            angles.append([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle])
+            time.sleep(0.1)
+
+        self.angular_offset = np.mean(angles, axis=0)
+        print(f"IMU offset calculated: {self.angular_offset}")
 
         left_offsets = np.array(
             [0.0,
@@ -61,8 +78,28 @@ class RealPPOController:
     def update_robot_state(self):
         """Update input data from robot sensors"""
         motor_feedback = self.kos.get_actuator_states()
+        
+        # Get IMU data
+        imu_data = self.imu_reader.get_data()
+        
+        # Calculate IMU angular velocity
+        imu_ang_vel = np.array([
+            imu_data.x_velocity, 
+            imu_data.y_velocity, 
+            imu_data.z_velocity
+        ]) * self.euler_signs
+        
+        # Calculate IMU orientation (euler angles)
+        angles = np.deg2rad([
+            imu_data.x_angle,
+            imu_data.y_angle, 
+            imu_data.z_angle
+        ] - self.angular_offset) * self.euler_signs
+        
+        # Normalize angles to [-pi, pi]
+        angles[angles > np.pi] -= 2 * np.pi
+        angles[angles < -np.pi] += 2 * np.pi
 
-        breakpoint()
 
         # Create dictionary of motor feedback to motor id
         motor_feedback_dict = {
@@ -83,14 +120,11 @@ class RealPPOController:
             motor["velocity"] for motor in motor_feedback
         ])
         
-        imu_ang_vel = np.zeros(3)  # Replace with actual IMU angular velocity
-        imu_euler = np.zeros(3)    # Replace with actual IMU orientation
-
         # Update input dictionary
         self.input_data["dof_pos.1"] = joint_positions.astype(np.float32)
         self.input_data["dof_vel.1"] = joint_velocities.astype(np.float32)
         self.input_data["imu_ang_vel.1"] = imu_ang_vel.astype(np.float32)
-        self.input_data["imu_euler_xyz.1"] = imu_euler.astype(np.float32)
+        self.input_data["imu_euler_xyz.1"] = angles.astype(np.float32)
         self.input_data["prev_actions.1"] = self.actions
         self.input_data["buffer.1"] = self.buffer
 
