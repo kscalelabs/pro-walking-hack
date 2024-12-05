@@ -16,16 +16,34 @@ counter = 0
 dir = 1
 
 print("Starting loop")
-while True:
-    # commands = [{'actuator_id': id, 'position': counter} for id in all_ids]
-    # kos.actuator.command_actuators(commands=commands)
 
-    # if counter > 20:
-    #     dir = -1
-    # elif counter < -20:
-    #     dir = 1
+try:
+    try:
+        print(kos.process_manager.start_kclip("jiggle"))
+    except Exception as e:
+        print(e)
+
+    while True:
+        _states = kos.actuator.get_actuators_state(actuator_ids=all_ids)
+        commands = [{'actuator_id': id, 'position': counter} for id in all_ids]
+        kos.actuator.command_actuators(commands=commands)
+
+        if counter > 10:
+            dir = -1
+        elif counter < -10:
+            dir = 1
         
-    # counter += dir
-    # print(counter)
+        counter += dir
+        print(counter)
 
-    time.sleep(0.01)
+        time.sleep(0.01)
+except KeyboardInterrupt:
+    try:
+        print(kos.process_manager.stop_kclip())
+    except Exception as e:
+        print(e)
+    commands = [{'actuator_id': id, 'position': 0} for id in all_ids]
+    kos.actuator.command_actuators(commands=commands)
+    for id in all_ids:
+        kos.actuator.configure_actuator(actuator_id=id, torque_enabled=False)
+
