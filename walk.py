@@ -37,7 +37,7 @@ class RealPPOController:
         }
         
         # Add IMU initialization
-        # self.imu_reader = HexmoveImuReader("can0", 1, 1)
+        self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, -1])
 
         self.left_arm_ids = [11, 12, 13, 14, 15]#, 16]
