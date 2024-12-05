@@ -173,6 +173,8 @@ class RealPPOController:
         
     def set_default_position(self):
         """Set the robot to the default position"""
+        # breakpoint()
+        # self.move_actuators(np.rad2deg(self.offsets + [0, 0.1, 0,0,0, 0,0.1,0,0,0]))
         self.move_actuators(np.rad2deg(self.offsets))
 
     def move_actuators(self, positions):
@@ -230,17 +232,16 @@ class RealPPOController:
 
 
 def main():
-    kos =pykos.KOS()
+    kos = pykos.KOS()
     controller = RealPPOController(
         model_path="gpr_walking.kinfer",
-        joint_mapping_signs=np.asarray([-1, -1, 1, -1, 1, -1, -1, 1, -1, 1]),
+        joint_mapping_signs=np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1]),
         kos=kos
     )
 
     controller.set_default_position()
-    breakpoint()
     time.sleep(1)
-
+    breakpoint()
     frequency = 1/100. # 100Hz
     # dt = 0.1 # Slow frequency for debugging
     start_time = time.time()
