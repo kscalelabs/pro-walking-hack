@@ -242,7 +242,10 @@ def main():
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
-        controller.kos.close()
+        commands = [{'actuator_id': id, 'position': 0} for id in controller.all_ids]
+        controller.kos.actuator.command_actuators(commands=commands)
+        for id in controller.all_ids:
+            controller.kos.actuator.configure_actuator(actuator_id=id, torque_enabled=False)
 
 
 if __name__ == "__main__":
