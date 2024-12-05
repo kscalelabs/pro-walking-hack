@@ -157,9 +157,11 @@ class RealPPOController:
 
         # Multiply positions and velocities by -1 because sim is ccw+ and real is cw+
         joint_positions = np.deg2rad(joint_positions)
-        joint_positions = self.model_info["default_standing"] * joint_positions
+        joint_positions = self.joint_mapping_signs * joint_positions
+        # joint_positions = self.model_info["default_standing"] * joint_positions
         joint_velocities = np.deg2rad(joint_velocities)
-        joint_velocities = self.model_info["default_standing"] * joint_velocities
+        joint_velocities = self.joint_mapping_signs * joint_velocities
+        # joint_velocities = self.model_info["default_standing"] * joint_velocities
 
         joint_positions -= self.offsets
 
@@ -233,9 +235,11 @@ class RealPPOController:
 
 def main():
     kos = pykos.KOS()
+    other_signs = np.array([-1, 1, 1, -1, 1, -1, 1, 1, -1, 1])
+    signs = np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1])
     controller = RealPPOController(
         model_path="gpr_walking.kinfer",
-        joint_mapping_signs=np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1]),
+        joint_mapping_signs=signs,
         kos=kos
     )
 
@@ -246,11 +250,6 @@ def main():
     # dt = 0.1 # Slow frequency for debugging
     start_time = time.time()
     counter = 0
-
-    try:
-        print(kos.process_manager.start_kclip("walk"))
-    except Exception as e:
-        print(e)
 
     try:
         while True:
@@ -265,8 +264,6 @@ def main():
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
-        print(kos.process_manager.stop_kclip())
-
         controller.kos.close()
 
 

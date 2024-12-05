@@ -14,8 +14,8 @@ from imu import HexmoveImuReader
 
 
 class RealPPOController:
-    def __init__(self, model_path: str, signs: np.ndarray):
-        self.kos = pykos.KOS()
+    def __init__(self, model_path: str, signs: np.ndarray, check_default: bool = False, kos: pykos.KOS = None):
+        self.kos = kos if kos is not None else pykos.KOS()
         self.kinfer = ONNXModel(model_path)
 
         self.signs = signs
@@ -55,13 +55,13 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=10,torque_enabled=True)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=10, torque_enabled=True)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=10,torque_enabled=True)
 
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -75,12 +75,9 @@ class RealPPOController:
         self.angular_offset = np.mean(angles, axis=0)
         print(f"IMU offset calculated: {self.angular_offset}")
 
-        # Negate default standing offsets because sim is ccw+ and real is cw+
+        # Adjust for sign of each joint
         self.left_offsets = self.signs[:5] * np.array(self.model_info["default_standing"][:5])
-
-        # TODO - make the mapping again for each motor idependenly
         self.right_offsets = self.signs[5:] * np.array(self.model_info["default_standing"][5:])
-
         self.offsets = np.concatenate([self.left_offsets, self.right_offsets])
 
         print(f"Offsets: {self.offsets}")
@@ -102,6 +99,11 @@ class RealPPOController:
         # Track previous actions and buffer for recurrent state
         self.actions = np.zeros(self.model_info["num_actions"], dtype=np.float32)
         self.buffer = np.zeros(self.model_info["num_observations"], dtype=np.float32)
+
+
+        if check_default:
+            self.set_default_position()
+            time.sleep(3)
 
     def update_robot_state(self):
         """Update input data from robot sensors"""        
@@ -125,6 +127,9 @@ class RealPPOController:
         # Normalize angles to [-pi, pi]
         angles[angles > np.pi] -= 2 * np.pi
         angles[angles < -np.pi] += 2 * np.pi
+
+        angles = np.array([0, 0, 0])
+        imu_ang_vel = np.array([0, 0, 0])
 
         motor_feedback = self.kos.actuator.get_actuators_state(self.all_ids)
 
@@ -161,6 +166,13 @@ class RealPPOController:
         joint_positions = self.signs * joint_positions
         joint_velocities = self.signs * joint_velocities
 
+        # joint_positions = np.deg2rad(joint_positions)
+        # joint_positions = self.model_info["default_standing"] * joint_positions
+        # joint_velocities = np.deg2rad(joint_velocities)
+        # joint_velocities = self.model_info["default_standing"] * joint_velocities
+
+        # joint_positions -= self.offsets
+
         # Update input dictionary
         self.input_data["dof_pos.1"] = joint_positions.astype(np.float32)
         self.input_data["dof_vel.1"] = joint_velocities.astype(np.float32)
@@ -188,6 +200,10 @@ class RealPPOController:
         """Set the robot to the default position"""
         self.move_actuators(np.rad2deg(self.offsets))
 
+    def set_zero_position(self):
+        """Set the robot to the zero position"""
+        self.move_actuators(np.zeros(self.model_info["num_actions"]))
+
     def step(self, dt):
         """Run one control step"""
         # Update command velocities
@@ -211,7 +227,7 @@ class RealPPOController:
         # Clip positions for safety
         positions = np.clip(positions, -0.75, 0.75)
 
-        expected_positions = self.signs * positions + self.offsets
+        expected_positions = positions + self.offsets
         expected_positions = np.rad2deg(expected_positions)
 
         # Calculate position error (actual - desired)
@@ -224,12 +240,20 @@ class RealPPOController:
 
         # Send positions to robot
         self.move_actuators(expected_positions)
+        # self.set_default_position()
+        # self.set_zero_position()
         return positions
 
 
 def main():
-    controller = RealPPOController(model_path="gpr_walking.kinfer")
-    frequency = 1/100. # 100Hz
+    kos = pykos.KOS()
+    pawel_signs = np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1])
+    other_signs = np.array([-1, 1, 1, -1, 1, -1, 1, 1, -1, 1])
+    controller = RealPPOController(model_path="gpr_walking.kinfer",
+                                   signs=other_signs,
+                                    check_default=True,
+                                    kos=kos)
+    frequency = 1/50. # 100Hz
     # dt = 0.1 # Slow frequency for debugging
     start_time = time.time()
     try:
@@ -241,11 +265,9 @@ def main():
             time.sleep(sleep_time)
     except KeyboardInterrupt:
         print("Exiting...")
-    finally:
-        commands = [{'actuator_id': id, 'position': 0} for id in controller.all_ids]
-        controller.kos.actuator.command_actuators(commands=commands)
         for id in controller.all_ids:
             controller.kos.actuator.configure_actuator(actuator_id=id, torque_enabled=False)
+        print("Torque disabled")
 
 
 if __name__ == "__main__":
