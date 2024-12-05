@@ -10,7 +10,7 @@ import time
 import pykos
 import numpy as np
 from kinfer.inference import ONNXModel
-from imu import HexmoveImuReader
+# from imu import HexmoveImuReader
 
 
 class RealPPOController:
@@ -43,7 +43,7 @@ class RealPPOController:
         }
         
         # Add IMU initialization
-        self.imu_reader = HexmoveImuReader("can0", 1, 1)
+        # self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, -1])
 
         self.left_arm_ids = [11, 12, 13, 14, 15]#, 16]
@@ -55,7 +55,8 @@ class RealPPOController:
         self.type_three_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [1, 2]]
         self.type_two_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [4]]
 
-        self.all_ids = self.left_arm_ids + self.right_arm_ids + self.left_leg_ids + self.right_leg_ids
+        # self.all_ids = self.left_arm_ids + self.right_arm_ids
+        self.all_ids = self.left_leg_ids + self.right_leg_ids
 
         # Configure all motors
         for id in self.type_four_ids:
@@ -68,12 +69,13 @@ class RealPPOController:
             self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, torque_enabled=True)
 
         # Calculate initial IMU offset as running average over 5 seconds
-        num_samples = 50  # 10 Hz for 5 seconds
+        num_samples = 1  # 10 Hz for 5 seconds
         angles = []
         print("Calculating IMU offset...")
         for _ in range(num_samples):
-            imu_data = self.imu_reader.get_data()
-            angles.append([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle])
+            # imu_data = self.imu_reader.get_data()
+            imu_data = [0, 0, 0]
+            angles.append(imu_data)
             time.sleep(0.1)
 
         self.angular_offset = np.mean(angles, axis=0)
@@ -108,25 +110,27 @@ class RealPPOController:
     def update_robot_state(self):
         """Update input data from robot sensors"""        
         # Get IMU data
-        imu_data = self.imu_reader.get_data()
+        # imu_data = self.imu_reader.get_data()
+
+        # # Calculate IMU angular velocity
+        imu_ang_vel = [0, 0, 0]
+        # imu_ang_vel = np.array([
+        #     imu_data.x_velocity, 
+        #     imu_data.y_velocity, 
+        #     imu_data.z_velocity
+        # ]) * self.euler_signs
         
-        # Calculate IMU angular velocity
-        imu_ang_vel = np.array([
-            imu_data.x_velocity, 
-            imu_data.y_velocity, 
-            imu_data.z_velocity
-        ]) * self.euler_signs
-        
-        # Calculate IMU orientation (euler angles)
-        angles = np.deg2rad([
-            imu_data.x_angle,
-            imu_data.y_angle, 
-            imu_data.z_angle
-        ] - self.angular_offset) * self.euler_signs
+        # # Calculate IMU orientation (euler angles)
+        # angles = np.deg2rad([
+        #     imu_data.x_angle,
+        #     imu_data.y_angle, 
+        #     imu_data.z_angle
+        # ] - self.angular_offset) * self.euler_signs
         
         # Normalize angles to [-pi, pi]
-        angles[angles > np.pi] -= 2 * np.pi
-        angles[angles < -np.pi] += 2 * np.pi
+        # angles[angles > np.pi] -= 2 * np.pi
+        # angles[angles < -np.pi] += 2 * np.pi
+        angles = [0, 0, 0]
 
         motor_feedback = self.kos.actuator.get_actuators_state(self.all_ids)
 
@@ -170,7 +174,7 @@ class RealPPOController:
 
     def set_default_position(self):
         """Set the robot to the default position"""
-        self.move_actuators(self.offsets)
+        self.move_actuators(np.rad2deg(self.offsets))
 
     def move_actuators(self, positions):
         """Move actuators to desired positions"""
@@ -230,17 +234,25 @@ def main():
         model_path="gpr_walking.kinfer",
         joint_mapping_signs=np.asarray([-1, -1, 1, -1, 1, -1, -1, 1, -1, 1])
     )
+
     controller.set_default_position()
+
     frequency = 1/100. # 100Hz
     # dt = 0.1 # Slow frequency for debugging
     start_time = time.time()
+
+    counter = 0
     try:
         while True:
+
             loop_start_time = time.time()
             controller.step(start_time)
             loop_end_time = time.time()
             sleep_time = max(0, frequency - (loop_end_time - loop_start_time))
             time.sleep(sleep_time)
+            counter += 1
+            if counter > 25:
+                raise KeyboardInterrupt("Loop took too long")
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
