@@ -84,7 +84,6 @@ class RealPPOController:
         # Adjust for the sign of each joint
         self.left_offsets = self.joint_mapping_signs[:5] * np.array(self.model_info["default_standing"][:5])
         self.right_offsets = self.joint_mapping_signs[5:] * np.array(self.model_info["default_standing"][5:])
-
         self.offsets = np.concatenate([self.left_offsets, self.right_offsets])
 
         print(f"Offsets: {self.offsets}")
@@ -113,7 +112,7 @@ class RealPPOController:
         # imu_data = self.imu_reader.get_data()
 
         # # Calculate IMU angular velocity
-        imu_ang_vel = [0, 0, 0]
+        imu_ang_vel = np.asarray([0, 0, 0])
         # imu_ang_vel = np.array([
         #     imu_data.x_velocity, 
         #     imu_data.y_velocity, 
@@ -130,7 +129,7 @@ class RealPPOController:
         # Normalize angles to [-pi, pi]
         # angles[angles > np.pi] -= 2 * np.pi
         # angles[angles < -np.pi] += 2 * np.pi
-        angles = [0, 0, 0]
+        angles = np.asarray([0, 0, 0])
 
         motor_feedback = self.kos.actuator.get_actuators_state(self.all_ids)
 
@@ -150,20 +149,19 @@ class RealPPOController:
             np.array([self.motor_feedback_dict[id].position for id in self.right_leg_ids])
         ])
 
-        joint_positions = np.deg2rad(joint_positions)
-        joint_velocities = np.deg2rad(joint_velocities)
-
-        # Multiply positions and velocities by -1 because sim is ccw+ and real is cw+
-        joint_positions = self.model_info["default_standing"] * joint_positions
-        joint_velocities = self.model_info["default_standing"] * joint_velocities
-
-        joint_positions -= self.offsets
-
         joint_velocities = np.concatenate([
             np.array([self.motor_feedback_dict[id].velocity for id in self.left_leg_ids]),
             np.array([self.motor_feedback_dict[id].velocity for id in self.right_leg_ids])
         ])
-    
+
+        # Multiply positions and velocities by -1 because sim is ccw+ and real is cw+
+        joint_positions = np.deg2rad(joint_positions)
+        joint_positions = self.model_info["default_standing"] * joint_positions
+        joint_velocities = np.deg2rad(joint_velocities)
+        joint_velocities = self.model_info["default_standing"] * joint_velocities
+
+        joint_positions -= self.offsets
+
         # Update input dictionary
         self.input_data["dof_pos.1"] = joint_positions.astype(np.float32)
         self.input_data["dof_vel.1"] = joint_velocities.astype(np.float32)
@@ -171,7 +169,7 @@ class RealPPOController:
         self.input_data["imu_euler_xyz.1"] = angles.astype(np.float32)
         self.input_data["prev_actions.1"] = self.actions
         self.input_data["buffer.1"] = self.buffer
-
+        
     def set_default_position(self):
         """Set the robot to the default position"""
         self.move_actuators(np.rad2deg(self.offsets))
@@ -198,7 +196,7 @@ class RealPPOController:
         self.input_data["y_vel.1"][0] = np.float32(self.command["y_vel"])
         self.input_data["rot.1"][0] = np.float32(self.command["rot"])
         self.input_data["t.1"][0] = np.float32(dt)
-
+  
         # Update robot state
         self.update_robot_state()
 
@@ -207,11 +205,12 @@ class RealPPOController:
 
         # Extract outputs
         positions = outputs["actions_scaled"]
+
         self.actions = outputs["actions"]
         self.buffer = outputs["x.3"]
 
         # Clip positions for safety
-        positions = np.clip(positions, -0.5, 0.5)
+        positions = np.clip(positions, -0.75, 0.75)
 
         expected_positions = positions + self.offsets
         expected_positions = np.rad2deg(expected_positions)
@@ -236,23 +235,22 @@ def main():
     )
 
     controller.set_default_position()
+    time.sleep(1)
 
     frequency = 1/100. # 100Hz
     # dt = 0.1 # Slow frequency for debugging
     start_time = time.time()
-
     counter = 0
     try:
         while True:
-
             loop_start_time = time.time()
-            controller.step(start_time)
+            controller.step(time.time() - start_time)
             loop_end_time = time.time()
             sleep_time = max(0, frequency - (loop_end_time - loop_start_time))
             time.sleep(sleep_time)
             counter += 1
-            if counter > 25:
-                raise KeyboardInterrupt("Loop took too long")
+            if counter > 1000:
+                raise KeyboardInterrupt("Exit safely")
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
