@@ -17,9 +17,10 @@ class RealPPOController:
     def __init__(
             self, 
             model_path: str,
-            joint_mapping_signs: np.ndarray
+            joint_mapping_signs: np.ndarray,
+            kos: pykos.KOS
         ):
-        self.kos = pykos.KOS()
+        self.kos = kos
         self.kinfer = ONNXModel(model_path)
 
         # Walking command defaults
@@ -60,13 +61,13 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=10, torque_enabled=True)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=10, torque_enabled=True)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=10, torque_enabled=True)
 
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 1  # 10 Hz for 5 seconds
@@ -229,9 +230,11 @@ class RealPPOController:
 
 
 def main():
+    kos =pykos.KOS()
     controller = RealPPOController(
         model_path="gpr_walking.kinfer",
-        joint_mapping_signs=np.asarray([-1, -1, 1, -1, 1, -1, -1, 1, -1, 1])
+        joint_mapping_signs=np.asarray([-1, -1, 1, -1, 1, -1, -1, 1, -1, 1]),
+        kos=kos
     )
 
     controller.set_default_position()
@@ -242,6 +245,12 @@ def main():
     # dt = 0.1 # Slow frequency for debugging
     start_time = time.time()
     counter = 0
+
+    try:
+        print(kos.process_manager.start_kclip("walk"))
+    except Exception as e:
+        print(e)
+
     try:
         while True:
             loop_start_time = time.time()
@@ -255,7 +264,10 @@ def main():
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
+        print(kos.process_manager.stop_kclip())
+
         controller.kos.close()
+
 
 
 if __name__ == "__main__":
