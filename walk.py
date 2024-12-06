@@ -72,15 +72,15 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=40, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=10, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=10, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -129,7 +129,7 @@ class RealPPOController:
         imu_data = self.imu_reader.get_data()
 
         # # Calculate IMU angular velocity
-        imu_ang_vel = np.array([
+        imu_ang_vel = np.deg2rad([
             imu_data.x_velocity, 
             imu_data.y_velocity, 
             imu_data.z_velocity
@@ -146,9 +146,16 @@ class RealPPOController:
         angles[angles > np.pi] -= 2 * np.pi
         angles[angles < -np.pi] += 2 * np.pi
 
+        print(f"IMU ang vel: {imu_ang_vel}")
+
         # Debugging
-        imu_ang_vel = np.asarray([0, 0, 0])
-        angles = np.asarray([0, 0, 0])
+        # imu_ang_vel = np.asarray([0, 0, 0])
+        # angles = np.asarray([0, 0, 0])
+
+        # Clip imu_ang_vel
+        # imu_ang_vel = np.clip(imu_ang_vel, -0.2, 0.2)
+        
+        print(f"Angles: {angles}")
 
         motor_feedback = self.kos.actuator.get_actuators_state(self.all_ids)
 
@@ -260,11 +267,19 @@ def main():
         kos=kos,
     )
 
-    kos.process_manager.start_kclip("walking")
+    print("Press Ctrl+C to start")
+    try:
+        while True:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("Starting...")
 
+    kos.process_manager.start_kclip("walking")
     time.sleep(1)
     frequency = 1/100. # 100Hz
     # dt = 0.1 # Slow frequency for debugging
+
+
     start_time = time.time()
 
     try:
