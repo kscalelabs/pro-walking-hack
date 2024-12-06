@@ -149,7 +149,7 @@ class RealPPOController:
         print(f"IMU ang vel: {imu_ang_vel}")
 
         # Debugging
-        # imu_ang_vel = np.asarray([0, 0, 0])
+        imu_ang_vel = np.asarray([0, 0, 0])
         # angles = np.asarray([0, 0, 0])
 
         # Clip imu_ang_vel
@@ -260,8 +260,11 @@ def main():
     kos = pykos.KOS()
     wes_signs = np.array([-1, 1, 1, -1, 1, -1, 1, 1, -1, 1])
     pawel_signs = np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1])
+
+    fast = "gpr_walking.kinfer"
+    slow = "gpr_0.5s_pawel.kinfer"
     controller = RealPPOController(
-        model_path="gpr_walking.kinfer",
+        model_path=slow,
         joint_mapping_signs=wes_signs,
         check_default=True,
         kos=kos,
