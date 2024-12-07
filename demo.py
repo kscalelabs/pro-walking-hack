@@ -77,32 +77,23 @@ def get_to_position(kos, motor_id, current_position, target_position, time_perio
 def wave(kos):
     # roll elbow
     roll_id = [23]
-    cmd = [{"actuator_id": id, "position": -60} for id in roll_id]
+    yaw_id = [24]
+    gripper_id = [26]
 
-    get_to_position(kos, 23, 0, -60, 1, 50)
-
-    time.sleep(0.01)
+    # roll elbow
+    get_to_position(kos, roll_id, 0, -60, 1, 50)
+    # yaw elbow
+    get_to_position(kos, yaw_id, 0, 90, 1, 50)
+    breakpoint()
 
     time_period = 20
     start_time = time.time()
     while time.time() - start_time < time_period:
-        # elbow 90 degrees
-        elbow = [24]
-        cmd = [{"actuator_id": id, "position": 90} for id in elbow]
-        kos.actuator.command_actuators(commands=cmd)
-        gripper = [26]
-        cmd = [{"actuator_id": id, "position": 100} for id in gripper]
-        kos.actuator.command_actuators(commands=cmd)
+        get_to_position(kos, yaw_id, 90, 180, 1, 50)
+        get_to_position(kos, gripper_id, 0, 100, 0.5, 50)
 
-        time.sleep(1)
-        # elbow 180
-        elbow = [24]
-        cmd = [{"actuator_id": id, "position": 180} for id in elbow]
-        kos.actuator.command_actuators(commands=cmd)
-        gripper = [26]
-        cmd = [{"actuator_id": id, "position": 0} for id in gripper]
-        kos.actuator.command_actuators(commands=cmd)
-        time.sleep(1.)
+        get_to_position(kos, yaw_id, 180, 90, 1, 50)
+        get_to_position(kos, gripper_id, 100, 0, 0.5, 50)
 
 
 if __name__ == "__main__":
@@ -111,11 +102,9 @@ if __name__ == "__main__":
 
     try:
         set_up(kos)
-        wave(kos)
         while True:
-            standing(kos)
-            breakpoint()
-            time.sleep(1./frequency)
+            wave(kos)
+
     except KeyboardInterrupt:
         print("Exiting...")
     except RuntimeError as e:
