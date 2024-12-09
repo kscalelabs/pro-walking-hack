@@ -53,8 +53,8 @@ class RealPPOController:
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, 1])
 
-        self.left_arm_ids = [11, 12, 13, 14, 15]#, 16]
-        self.right_arm_ids = [21, 22, 23, 24, 25]#, 26]
+        self.left_arm_ids = []# [11, 12, 13, 14, 15]#, 16]
+        self.right_arm_ids = []# [21, 22, 23, 24, 25]#, 26]
         self.left_leg_ids = [31, 32, 33, 34, 35]
         self.right_leg_ids = [41, 42, 43, 44, 45]
 
