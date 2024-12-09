@@ -73,12 +73,12 @@ class RealPPOController:
         # Configure all motors
         for id in self.type_four_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=10, max_torque=15, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=15, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=5, max_torque=15, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=10, max_torque=10, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=10, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
@@ -152,8 +152,8 @@ class RealPPOController:
         print(f"IMU ang vel: {imu_ang_vel}")
 
         # Debugging
-        # imu_ang_vel = np.asarray([0, 0, 0])
-        # angles = np.asarray([0, 0, 0])
+        imu_ang_vel = np.asarray([0, 0, 0])
+        angles = np.asarray([0, 0, 0])
 
         # Clip imu_ang_vel
         # imu_ang_vel = np.clip(imu_ang_vel, -0.2, 0.2)
