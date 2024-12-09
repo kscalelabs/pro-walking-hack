@@ -72,7 +72,7 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=100, kd=10, max_torque=30, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=100, kd=10, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
