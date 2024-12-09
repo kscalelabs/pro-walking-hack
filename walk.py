@@ -31,7 +31,7 @@ class RealPPOController:
 
         # Walking command defaults
         self.command = {
-            "x_vel": 0.0,
+            "x_vel": 0.4,
             "y_vel": 0.0,
             "rot": 0.0,
         }
@@ -51,7 +51,7 @@ class RealPPOController:
         
         # Add IMU initialization
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
-        self.euler_signs = np.array([-1, -1, -1])
+        self.euler_signs = np.array([-1, -1, 1])
 
         self.left_arm_ids = [11, 12, 13, 14, 15]#, 16]
         self.right_arm_ids = [21, 22, 23, 24, 25]#, 26]
@@ -72,15 +72,15 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=100, kd=10, max_torque=30, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=10, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=17, torque_enabled=True)
             time.sleep(0.1)
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -150,7 +150,7 @@ class RealPPOController:
 
         # Debugging
         imu_ang_vel = np.asarray([0, 0, 0])
-        # angles = np.asarray([0, 0, 0])
+        angles = np.asarray([0, 0, 0])
 
         # Clip imu_ang_vel
         # imu_ang_vel = np.clip(imu_ang_vel, -0.2, 0.2)
@@ -263,8 +263,9 @@ def main():
 
     fast = "gpr_walking.kinfer"
     slow = "gpr_0.5s_pawel.kinfer"
+    weak = "gpr_walking_weak.kinfer"
     controller = RealPPOController(
-        model_path=slow,
+        model_path=weak,
         joint_mapping_signs=wes_signs,
         check_default=True,
         kos=kos,
