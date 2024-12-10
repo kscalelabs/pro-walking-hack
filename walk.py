@@ -31,9 +31,9 @@ class RealPPOController:
 
         # Walking command defaults
         self.command = {
-            "x_vel": 0.4,
+            "x_vel": 0.0,
             "y_vel": 0.0,
-            "rot": 0.0,
+            "rot": -0.1,
         }
 
         self.joint_mapping_signs = joint_mapping_signs
@@ -150,7 +150,7 @@ class RealPPOController:
 
         # Debugging
         imu_ang_vel = np.asarray([0, 0, 0])
-        angles = np.asarray([0, 0, 0])
+        # angles = np.asarray([0, 0, 0])
 
         # Clip imu_ang_vel
         # imu_ang_vel = np.clip(imu_ang_vel, -0.2, 0.2)
