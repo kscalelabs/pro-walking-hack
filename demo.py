@@ -23,6 +23,7 @@ def get_state(kos, verbose=True):
     
     return state
 
+
 def set_up(kos):
     arm_ids = [21, 22, 23, 24, 25, 26]
     left_leg_ids = [31, 32, 33, 34, 35]
@@ -32,26 +33,29 @@ def set_up(kos):
     type_three_ids = [limb[id] for limb in [left_leg_ids, right_leg_ids] for id in [1, 2]]
     type_two_ids = [limb[id] for limb in [left_leg_ids, right_leg_ids] for id in [4]]
 
+    get_state(kos)
+    breakpoint()
+
     # Configure all motors
     for id in type_four_ids:
         print(f"Configuring actuator {id}")
         kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=20, torque_enabled=True)
+        time.sleep(0.1)
 
     for id in type_three_ids:
         print(f"Configuring actuator {id}")
         kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=15, torque_enabled=True)
-
+        time.sleep(0.1)
     for id in type_two_ids:
         print(f"Configuring actuator {id}")
         kos.actuator.configure_actuator(actuator_id=id, kp=34, kd=5, max_torque=10, torque_enabled=True)
-
+        time.sleep(0.1)
+    breakpoint()
     for id in arm_ids:
         print(f"Configuring actuator {id}")
-        kos.actuator.configure_actuator(actuator_id=id, kp=5, kd=5, max_torque=5, torque_enabled=True)
+        kos.actuator.configure_actuator(actuator_id=id, kp=10, kd=3, max_torque=5, torque_enabled=True)
 
-    state = kos.actuator.get_actuators_state(actuator_ids=ALL_IDS)
-    for s in state:
-        print(f"Actuator {s.actuator_id} is {s.position:.3f}")
+    get_state(kos)
 
 
 def get_to_position(kos, motor_id, current_position, target_position, time_period, frequency):
@@ -74,17 +78,38 @@ def get_to_position(kos, motor_id, current_position, target_position, time_perio
         time.sleep(1./frequency)
 
 
+def get_to_positions(kos, motor_ids, current_positions, target_positions, time_period, frequency):
+    """Set the actuator to the given positons
+    from the current positions to the target positions withing n seconds at f frequency
+
+    Args:
+        kos: KOS instance
+        motor_id: the motor id to move
+        current_positions: the current positions of the motors
+        target_positions: the target positions of the motors
+        time_period: the time period to move the motors
+        frequency: the frequency of the movement
+    """
+    interpolation_factor = np.linspace(current_positions, target_positions, time_period * frequency)
+
+    for pos in interpolation_factor:
+        cmd = [{"actuator_id": motor_id, "position": pos} for motor_id in motor_ids]
+        kos.actuator.command_actuators(commands=cmd)
+        time.sleep(1./frequency)
+
+
 def wave(kos):
     # roll elbow
-    roll_id = [23]
-    yaw_id = [24]
-    gripper_id = [26]
+    roll_id = 23
+    yaw_id = 24
+    gripper_id = 26
 
+    breakpoint()
+    get_to_position(kos, roll_id, 0, -10, 1, 50)
     # roll elbow
     get_to_position(kos, roll_id, 0, -60, 1, 50)
     # yaw elbow
     get_to_position(kos, yaw_id, 0, 90, 1, 50)
-    breakpoint()
 
     time_period = 20
     start_time = time.time()
@@ -102,6 +127,7 @@ if __name__ == "__main__":
 
     try:
         set_up(kos)
+        standing(kos)
         while True:
             wave(kos)
 
