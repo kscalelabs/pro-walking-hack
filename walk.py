@@ -74,12 +74,12 @@ class RealPPOController:
         # Configure all motors
         for id in self.type_four_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(120/5000)*100, kd=(10/100)*100, max_torque=40, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=60, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(60/5000)*100, kd=(5/100)*100, max_torque=20, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=40, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
@@ -270,8 +270,9 @@ def main():
     slow = "gpr_0.5s_pawel.kinfer"
     weak = "gpr_walking_weak.kinfer"
     pr126 = "gpr_walking_pr126.kinfer"
+    med_gait = "74c91d8_0.4s.kinfer"
     controller = RealPPOController(
-        model_path=pr126,
+        model_path=med_gait,
         joint_mapping_signs=wes_signs,
         check_default=True,
         kos=kos,
