@@ -72,15 +72,18 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=(120/5000)*100, kd=(10/100)*100, max_torque=40, torque_enabled=True)
+            # self.kos.actuator.configure_actuator(actuator_id=id, kp=(120/5000)*100, kd=(10/100)*100, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, torque_enabled=False)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=(60/5000)*100, kd=(5/100)*100, max_torque=20, torque_enabled=True)
+            # self.kos.actuator.configure_actuator(actuator_id=id, kp=(60/5000)*100, kd=(5/100)*100, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, torque_enabled=False)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=(17/500)*100, kd=(5/5)*100, max_torque=17, torque_enabled=True)
+            # self.kos.actuator.configure_actuator(actuator_id=id, kp=(17/500)*100, kd=(5/5)*100, max_torque=17, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, torque_enabled=False)
             time.sleep(0.1)
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
