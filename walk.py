@@ -53,8 +53,8 @@ class RealPPOController:
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, 1])
 
-        self.left_arm_ids = []# [11, 12, 13, 14, 15]#, 16]
-        self.right_arm_ids = []# [21, 22, 23, 24, 25]#, 26]
+        self.left_arm_ids = [11, 12, 13, 14, 15, 16]
+        self.right_arm_ids = [21, 22, 23, 24, 25, 26]
         self.left_leg_ids = [31, 32, 33, 34, 35]
         self.right_leg_ids = [41, 42, 43, 44, 45]
 
@@ -73,17 +73,17 @@ class RealPPOController:
         # Configure all motors
         for id in self.type_four_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(120/5000)*100, kd=(10/100)*100, max_torque=40, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, torque_enabled=False)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=40, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(60/5000)*100, kd=(5/100)*100, max_torque=20, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, torque_enabled=False)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(17/500)*100, kd=(5/5)*100, max_torque=17, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, torque_enabled=False)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=17, torque_enabled=True)
             time.sleep(0.1)
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -122,9 +122,10 @@ class RealPPOController:
         self.actions = np.zeros(self.model_info["num_actions"], dtype=np.float32)
         self.buffer = np.zeros(self.model_info["num_observations"], dtype=np.float32)
 
-        if check_default:
-            self.set_default_position()
-            time.sleep(3)
+
+        self.set_default_position()
+        time.sleep(3)
+        print('Default position set')
 
     def update_robot_state(self):
         """Update input data from robot sensors"""        
