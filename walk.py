@@ -33,7 +33,7 @@ class RealPPOController:
         self.command = {
             "x_vel": 0.0,
             "y_vel": 0.0,
-            "rot": -0.1,
+            "rot": 0.0,
         }
 
         self.joint_mapping_signs = joint_mapping_signs
@@ -52,6 +52,7 @@ class RealPPOController:
         # Add IMU initialization
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
         self.euler_signs = np.array([-1, -1, 1])
+        # self.euler_signs = np.array([1, 1, -1])
 
         self.left_arm_ids = [11, 12, 13, 14, 15, 16]
         self.right_arm_ids = [21, 22, 23, 24, 25, 26]
