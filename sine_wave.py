@@ -2,16 +2,40 @@ import pykos
 import argparse
 import numpy as np
 import time
+from demo import get_to_position  # Add this import at the top
+
+"""
+
+Acuator Id Mapping:
+
+Left Leg:
+
+31 - Hip
+
+34 - Knee
+
+35 - Ankle
+
+
+Right Leg:
+
+41 - Hip
+
+44 - Knee
+
+45 - Ankle
+
+"""
 
 kos = pykos.KOS()
 
 ALL_IDS = [
-    21, 22, 23, 24, 25, 26, # arm
+    # 21, 22, 23, 24, 25, 26, # arm
     31, 32, 33, 34, 35,
     41, 42, 43, 44, 45]
 
 def set_up(kos):
-    arm_ids = [21, 22, 23, 24, 25, 26]
+    # arm_ids = [21, 22, 23, 24, 25, 26]
     left_leg_ids = [31, 32, 33, 34, 35]
     right_leg_ids = [41, 42, 43, 44, 45]
 
@@ -32,9 +56,9 @@ def set_up(kos):
         print(f"Configuring actuator {id}")
         kos.actuator.configure_actuator(actuator_id=id, kp=34, kd=5, max_torque=10, torque_enabled=True)
 
-    for id in arm_ids:
-        print(f"Configuring actuator {id}")
-        kos.actuator.configure_actuator(actuator_id=id, kp=5, kd=5, max_torque=5, torque_enabled=True)
+    # for id in arm_ids:
+    #     print(f"Configuring actuator {id}")
+    #     kos.actuator.configure_actuator(actuator_id=id, kp=5, kd=5, max_torque=5, torque_enabled=True)
 
     state = kos.actuator.get_actuators_state(actuator_ids=ALL_IDS)
     for s in state:
@@ -42,11 +66,9 @@ def set_up(kos):
 
 def main(motor_id=42, kp=1.0, kd=0.1, period=1.0, amplitude=np.pi/4, max_torque=40.0):
     try:
-        try:
-            kos.process_manager.start_kclip("sine_wave_motor_{motor_id}_kp_{kp}_kd_{kd}_period_{period}_amplitude_{amplitude}_max_torque_{max_torque}")
-            set_up(kos)
-        except Exception as e:
-            print(e)
+        kos.process_manager.start_kclip(f"sine_wave_motor_{motor_id}_kp_{kp}_kd_{kd}_period_{period}_amplitude_{amplitude}_max_torque_{max_torque}")
+        set_up(kos)
+        
         # Configure the actuator first
         print(f"Configuring actuator {motor_id}")
         kos.actuator.configure_actuator(
@@ -57,19 +79,38 @@ def main(motor_id=42, kp=1.0, kd=0.1, period=1.0, amplitude=np.pi/4, max_torque=
             torque_enabled=True
         )
 
+        desired_period = 0.01  # 100Hz = 0.01 seconds per loop
         start_time = time.time()
-        while True:
-            # Calculate sine wave position: amplitude * sin(2π * t/T)
-            state = kos.actuator.get_actuators_state(actuator_ids=[motor_id])
-            print(f"Actuator {motor_id} is {state[0].position:.3f}")
+        
+        while time.time() - start_time < 15.0:  # Run for exactly 5 seconds
+            loop_start = time.time()
+            
+            # Calculate sine wave position and send command
             t = time.time() - start_time
-            position = amplitude * np.sin(2 * np.pi * t / period) * 180 / np.pi - 0.441 * 180 / np.pi
+            position = amplitude * np.sin(2 * np.pi * t / period) * 180 / np.pi
             
             # Command the actuator
             command = {'actuator_id': motor_id, 'position': position}
             kos.actuator.command_actuators(commands=[command])
             
-            time.sleep(0.01)  # 100Hz control loop
+            # Calculate how long to sleep
+            computation_time = time.time() - loop_start
+            sleep_time = max(0, desired_period - computation_time)
+            time.sleep(sleep_time)
+
+        # Get current position for smooth transition
+        state = kos.actuator.get_actuators_state(actuator_ids=[motor_id])
+        current_pos = state[0].position
+        
+        # Smoothly return to zero using get_to_position
+        get_to_position(kos, motor_id, current_pos, 0, time_period=1, frequency=50)
+        
+        # Disable torque after completing
+        kos.actuator.configure_actuator(
+            actuator_id=motor_id, 
+            torque_enabled=False
+        )
+        kos.process_manager.stop_kclip()
 
     except KeyboardInterrupt:
         # kos.process_manager.stop_kclip("jiggle")
@@ -100,3 +141,8 @@ if __name__ == "__main__":
         amplitude=args.amplitude, 
         max_torque=args.max_torque
     )
+
+"""
+python3 sine_wave.py --motor_id 44 --kp 120.0 --kd 10.0 --period 10 --max_torque=20 --amplitude 0.52
+
+"""
