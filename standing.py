@@ -4,8 +4,6 @@ import pykos
 import numpy as np
 from collections import OrderedDict
 from kinfer.inference import ONNXModel
-from imu import HexmoveImuReader
-
 
 # Define ordered joint mapping signs
 JOINT_MAPPING_SIGNS = OrderedDict([
@@ -21,7 +19,6 @@ JOINT_MAPPING_SIGNS = OrderedDict([
     ("R_ankle", 1)
 ])
 
-
 class RealPPOController:
     def __init__(
             self, 
@@ -36,12 +33,10 @@ class RealPPOController:
             self.kos = kos
 
         self.kinfer = ONNXModel(model_path)
-        self.imu_reader = HexmoveImuReader("can0", 1, 1)
-        self.euler_signs = np.array([-1, -1, 1])
 
         # Walking command defaults
         self.command = {
-            "x_vel": 0.2,
+            "x_vel": 0.4,
             "y_vel": 0.0,
             "rot": 0.0,
         }
@@ -74,24 +69,15 @@ class RealPPOController:
 
         # Configure all motors
         for id in self.type_four_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=10, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=300, kd=5, max_torque=20, torque_enabled=True)
 
         for id in self.type_three_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=60, kd=5, max_torque=10, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=5, max_torque=10, torque_enabled=True)
 
         for id in self.type_two_ids:
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=17, kd=5, max_torque=10, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=5, max_torque=10, torque_enabled=True)
 
-        # Calculate initial IMU offset as running average over 5 seconds
-        num_samples = 50  # 10 Hz for 5 seconds
-        angles = []
-        print("Calculating IMU offset...")
-        for _ in range(num_samples):
-            imu_data = self.imu_reader.get_data()
-            angles.append([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle])
-            time.sleep(0.1)
-
-        self.angular_offset = np.mean(angles, axis=0)
+        self.angular_offset = np.array([0, 0, 0])
         print(f"IMU offset calculated: {self.angular_offset}")
 
         # Adjust for the sign of each joint
@@ -99,7 +85,7 @@ class RealPPOController:
         self.right_offsets = self.joint_mapping_signs[5:] * np.array(self.model_info["default_standing"][5:])
         self.offsets = np.concatenate([self.left_offsets, self.right_offsets])
         print(f"Offsets: {self.offsets}")
-
+        
         # Initialize input state with dynamic sizes from metadata
         self.input_data = {
             "x_vel.1": np.zeros(1, dtype=np.float32),
@@ -123,34 +109,7 @@ class RealPPOController:
             time.sleep(2)
 
     def update_robot_state(self):
-        """Update input data from robot sensors"""
-        # Get IMU data
-        imu_data = self.imu_reader.get_data()
-
-        # # Calculate IMU angular velocity
-        imu_ang_vel = np.deg2rad([
-            imu_data.x_velocity, 
-            imu_data.y_velocity, 
-            imu_data.z_velocity
-        ]) * self.euler_signs
-        
-        # Calculate IMU orientation (euler angles)
-        angles = np.deg2rad([
-            imu_data.x_angle,
-            imu_data.y_angle, 
-            imu_data.z_angle
-        ] - self.angular_offset) * self.euler_signs
-        
-        # Normalize angles to [-pi, pi]
-        angles[angles > np.pi] -= 2 * np.pi
-        angles[angles < -np.pi] += 2 * np.pi
-
-        print(f"IMU ang vel: {imu_ang_vel}")
-
-        # Debugging
-        imu_ang_vel = np.asarray([0, 0, 0])
-        angles = np.asarray([0, 0, 0])
-
+        """Update input data from robot sensors"""        
         # Debugging
         imu_ang_vel = np.asarray([0, 0, 0])
         angles = np.asarray([0, 0, 0])
@@ -255,19 +214,14 @@ class RealPPOController:
 if __name__ == "__main__":
     kos = pykos.KOS()
     
-    model = "gpr_walking_126.kinfer"
+    model = "models/standing.kinfer"
     controller = RealPPOController(
         model_path=model,
         check_default=True,
         kos=kos,
     )
 
-    print("Press Ctrl+C to start")
-    try:
-        while True:
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        print("Starting...")
+    input("Press Enter to start...")
     
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     kos.process_manager.start_kclip(f"walking_{timestamp}")
