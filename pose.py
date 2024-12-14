@@ -9,6 +9,8 @@ import argparse
 
 import pykos
 
+import numpy as np
+
 
 class ComplianceController:
     def __init__(self, zero_on_start: bool = False, position_file: str = None) -> None:
@@ -67,15 +69,23 @@ class ComplianceController:
                         torque_enabled=True
                     )
                 
-                # Command positions
-                commands = [
-                    {'actuator_id': int(id), 'position': float(pos)}
-                    for id, pos in positions.items()
-                ]
-                self.kos.actuator.command_actuators(commands=commands)
+                # Get current positions and move smoothly to target positions
+                with self._kos_lock:
+                    current_states = self.kos.actuator.get_actuators_state(
+                        actuator_ids=self.all_arms + self.all_legs
+                    )
                 
-                # Wait for movement to complete
-                time.sleep(2.0)
+                # Move each actuator to its target position smoothly
+                for state in current_states:
+                    motor_id = state.actuator_id
+                    if str(motor_id) in positions:  # Check if motor has a target position
+                        current_pos = state.position
+                        target_pos = float(positions[str(motor_id)])
+                        self.get_to_position(
+                            motor_id=motor_id,
+                            current_position=current_pos,
+                            target_position=target_pos
+                        )
             except Exception as e:
                 print(f"Error loading positions: {e}")
 
@@ -227,6 +237,25 @@ class ComplianceController:
                 json.dump(positions, f, indent=2)
             
             print(f"\nPositions recorded to {filename}")
+
+    def get_to_position(self, motor_id, current_position, target_position, time_period=5.0, frequency=50):
+        """Set the actuator to the given position smoothly
+        from the current position to the target position within n seconds at f frequency
+
+        Args:
+            motor_id: the motor id to move
+            current_position: the current position of the motor
+            target_position: the target position of the motor
+            time_period: the time period to move the motor (default 2.0 seconds)
+            frequency: the frequency of the movement (default 50Hz)
+        """
+        interpolation_factor = np.linspace(current_position, target_position, int(time_period * frequency))
+
+        for pos in interpolation_factor:
+            with self._kos_lock:
+                cmd = [{"actuator_id": motor_id, "position": pos}]
+                self.kos.actuator.command_actuators(commands=cmd)
+            time.sleep(1./frequency)
 
 def get_char() -> str:
     fd = sys.stdin.fileno()
