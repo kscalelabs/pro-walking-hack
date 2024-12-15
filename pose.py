@@ -6,6 +6,7 @@ import time
 import json
 from datetime import datetime
 import argparse
+import os
 
 import pykos
 
@@ -29,8 +30,8 @@ class ComplianceController:
 
         self.stiff_params = {
             'type_four': {'kp': 220, 'kd': 10, 'torque_limit': 20},  # hip and knee
-            'type_three': {'kp': 100, 'kd': 5, 'torque_limit': 20},   # middle joints
-            'type_two': {'kp': 30, 'kd': 5, 'torque_limit': 17},     # ankle
+            'type_three': {'kp': 180, 'kd': 5, 'torque_limit': 20},   # middle joints
+            'type_two': {'kp': 140, 'kd': 5, 'torque_limit': 30},     # ankle
             'type_zero': {'kp': 10, 'kd': 1, 'torque_limit': 10},    # gripper
         }
 
@@ -45,6 +46,9 @@ class ComplianceController:
         # Track compliance state
         self.arms_compliant = False
         self.legs_compliant = False
+        
+        self._kos_lock = threading.Lock()    # Lock for KOS access
+        self._state_lock = threading.Lock()  # Lock for compliance state
 
         if zero_on_start:
             for id in self.all_arms + self.all_legs:
@@ -69,28 +73,14 @@ class ComplianceController:
                         torque_enabled=True
                     )
                 
-                # Get current positions and move smoothly to target positions
-                with self._kos_lock:
-                    current_states = self.kos.actuator.get_actuators_state(
-                        actuator_ids=self.all_arms + self.all_legs
-                    )
-                
-                # Move each actuator to its target position smoothly
-                for state in current_states:
-                    motor_id = state.actuator_id
-                    if str(motor_id) in positions:  # Check if motor has a target position
-                        current_pos = state.position
-                        target_pos = float(positions[str(motor_id)])
-                        self.get_to_position(
-                            motor_id=motor_id,
-                            current_position=current_pos,
-                            target_position=target_pos
-                        )
+                # Move all actuators to their target positions simultaneously
+                position_targets = {
+                    int(motor_id): float(position) 
+                    for motor_id, position in positions.items()
+                }
+                self.move_to_positions(position_targets)
             except Exception as e:
                 print(f"Error loading positions: {e}")
-
-        self._kos_lock = threading.Lock()    # Lock for KOS access
-        self._state_lock = threading.Lock()  # Lock for compliance state
 
         # Initialize all motors with stiff gains
         self.configure_arms(stiff=True)
@@ -228,9 +218,14 @@ class ComplianceController:
                 for state in arm_states + leg_states
             }
             
+            # Create saved_poses directory if it doesn't exist
+            save_dir = "saved_poses"
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            
             # Generate timestamp for filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"recorded_positions_{timestamp}.json"
+            filename = os.path.join(save_dir, f"recorded_positions_{timestamp}.json")
             
             # Save to file
             with open(filename, 'w') as f:
@@ -238,23 +233,39 @@ class ComplianceController:
             
             print(f"\nPositions recorded to {filename}")
 
-    def get_to_position(self, motor_id, current_position, target_position, time_period=5.0, frequency=50):
-        """Set the actuator to the given position smoothly
-        from the current position to the target position within n seconds at f frequency
-
+    def move_to_positions(self, position_targets: dict, time_period=5.0, frequency=50):
+        """Move multiple actuators to their target positions smoothly within the specified time period.
+        
         Args:
-            motor_id: the motor id to move
-            current_position: the current position of the motor
-            target_position: the target position of the motor
-            time_period: the time period to move the motor (default 2.0 seconds)
+            position_targets: dict mapping motor_ids to their target positions
+            time_period: the time period to move the motors (default 5.0 seconds)
             frequency: the frequency of the movement (default 50Hz)
         """
-        interpolation_factor = np.linspace(current_position, target_position, int(time_period * frequency))
+        with self._kos_lock:
+            # Get current positions of all motors we want to move
+            current_states = self.kos.actuator.get_actuators_state(
+                actuator_ids=list(position_targets.keys())
+            )
+            current_positions = {
+                state.actuator_id: state.position 
+                for state in current_states
+            }
 
-        for pos in interpolation_factor:
+        # Create interpolation arrays for each motor
+        steps = int(time_period * frequency)
+        interpolations = {
+            motor_id: np.linspace(current_positions[motor_id], target_pos, steps)
+            for motor_id, target_pos in position_targets.items()
+        }
+
+        # Move all motors simultaneously
+        for step in range(steps):
             with self._kos_lock:
-                cmd = [{"actuator_id": motor_id, "position": pos}]
-                self.kos.actuator.command_actuators(commands=cmd)
+                commands = [
+                    {"actuator_id": motor_id, "position": interpolations[motor_id][step]}
+                    for motor_id in position_targets.keys()
+                ]
+                self.kos.actuator.command_actuators(commands=commands)
             time.sleep(1./frequency)
 
 def get_char() -> str:
