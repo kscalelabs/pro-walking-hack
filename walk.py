@@ -271,12 +271,12 @@ def main() -> None:
     wes_signs = np.array([-1, 1, 1, -1, 1, -1, 1, 1, -1, 1])
     _pawel_signs = np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1])
 
-    _fast = "gpr_walking.kinfer"
-    _slow = "gpr_0.5s_pawel.kinfer"
-    _weak = "gpr_walking_weak.kinfer"
-    _pr126 = "gpr_walking_pr126.kinfer"
-    _med_gait = "74c91d8_0.4s.kinfer"
-    standing = "gpr_standing.kinfer"
+    _fast = "policies/gpr_walking.kinfer"
+    _slow = "policies/gpr_0.5s_pawel.kinfer"
+    _weak = "policies/gpr_walking_weak.kinfer"
+    _pr126 = "policies/gpr_walking_pr126.kinfer"
+    _med_gait = "policies/74c91d8_0.4s.kinfer"
+    standing = "policies/gpr_standing.kinfer"
     controller = RealPPOController(
         model_path=standing,
         joint_mapping_signs=wes_signs,
