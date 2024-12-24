@@ -32,7 +32,7 @@ class RealPPOController:
 
         # Walking command defaults
         self.command = {
-            "x_vel": 0.0,
+            "x_vel": 0.2,
             "y_vel": 0.0,
             "rot": 0.0,
         }
@@ -52,7 +52,9 @@ class RealPPOController:
 
         # Add IMU initialization
         self.imu_reader = HexmoveImuReader("can0", 1, 1)
-        self.euler_signs = np.array([-1, -1, 1])
+        self.euler_signs = np.array([1, 1, 1])
+
+
         # self.euler_signs = np.array([1, 1, -1])
 
         self.left_arm_ids = [11, 12, 13, 14, 15, 16]
@@ -75,17 +77,17 @@ class RealPPOController:
         # Configure all motors
         for id in self.type_four_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(120/5000)*100, kd=(10/100)*100, max_torque=40, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=300, kd=5, max_torque=40, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=150, kd=6, max_torque=30, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(60/5000)*100, kd=(5/100)*100, max_torque=20, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=5, max_torque=20, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=100, kd=4, max_torque=25, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(17/500)*100, kd=(5/5)*100, max_torque=17, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=5, max_torque=17, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=3, max_torque=17, torque_enabled=True)
             time.sleep(0.1)
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -276,9 +278,22 @@ def main() -> None:
     _weak = "policies/gpr_walking_weak.kinfer"
     _pr126 = "policies/gpr_walking_pr126.kinfer"
     _med_gait = "policies/74c91d8_0.4s.kinfer"
-    standing = "policies/gpr_standing.kinfer"
+    _standing = "policies/gpr_standing.kinfer"
+
+
+    # Imu tests
+    _noisy = "policies/noisy_imu_walking.kinfer"
+    _filtered = "policies/filtered_walking.kinfer"
+    _less_noise = "policies/less_noise.kinfer"
+
+    _noisy_small = "policies/noisy_small.kinfer"
+    _short_steps = "policies/short_steps.kinfer"
+
+    _normal_short_plane = "policies/normal_short_plane.kinfer"
+    _normal_short_trimesh = "policies/normal_short_trimesh.kinfer"
+
     controller = RealPPOController(
-        model_path=standing,
+        model_path=_normal_short_plane,
         joint_mapping_signs=wes_signs,
         check_default=True,
         kos=kos,
@@ -291,7 +306,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("Starting...")
 
-    kos.process_manager.start_kclip("walking")
+    # kos.process_manager.start_kclip("walking")
     time.sleep(1)
     frequency = 1/100. # 100Hz
     dt = frequency  # Fixed timestep
@@ -310,7 +325,7 @@ def main() -> None:
     finally:
         for id in controller.all_ids:
             controller.kos.actuator.configure_actuator(actuator_id=id, torque_enabled=False)
-        controller.kos.process_manager.stop_kclip()
+        # controller.kos.process_manager.stop_kclip()
         print("Torque disabled")
 
 
