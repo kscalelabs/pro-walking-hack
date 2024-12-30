@@ -1,14 +1,11 @@
 # requirements.txt
 
 # Interfacing with sensors.
-actuator
-berryimu
+pykos
+kscale-imu
 
 # Logitech F310 gamepad.
 inputs
 
 # Running the model.
-torch
-onnx
-onnxruntime
-onnxscript
+kinfer

@@ -1,10 +1,10 @@
 from kinfer.inference import ONNXModel
 
-fast = "gpr_walking.kinfer"
-slow = "gpr_0.5s_pawel.kinfer"
-weak = "gpr_walking_weak.kinfer"
+standing = "policies/gpr_standing.kinfer"
 
-model = ONNXModel(model_path=weak)
+
+
+model = ONNXModel(model_path=standing)
 
 metadata = model.get_metadata()
 print(metadata)
