@@ -102,6 +102,7 @@ if __name__ == "__main__":
 
     try:
         set_up(kos)
+        breakpoint()
         while True:
             wave(kos)
 
