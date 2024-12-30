@@ -77,17 +77,17 @@ class RealPPOController:
         # Configure all motors
         for id in self.type_four_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(120/5000)*100, kd=(10/100)*100, max_torque=40, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=150, kd=6, max_torque=30, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=300, kd=5, max_torque=40, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_three_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(60/5000)*100, kd=(5/100)*100, max_torque=20, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=100, kd=4, max_torque=25, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=120, kd=5, max_torque=20, torque_enabled=True)
             time.sleep(0.1)
 
         for id in self.type_two_ids:
             # self.kos.actuator.configure_actuator(actuator_id=id, kp=(17/500)*100, kd=(5/5)*100, max_torque=17, torque_enabled=True)
-            self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=3, max_torque=17, torque_enabled=True)
+            self.kos.actuator.configure_actuator(actuator_id=id, kp=40, kd=5, max_torque=17, torque_enabled=True)
             time.sleep(0.1)
         # Calculate initial IMU offset as running average over 5 seconds
         num_samples = 50  # 10 Hz for 5 seconds
@@ -273,27 +273,10 @@ def main() -> None:
     wes_signs = np.array([-1, 1, 1, -1, 1, -1, 1, 1, -1, 1])
     _pawel_signs = np.asarray([-1, -1, 1, -1, 1, -1, 1, 1, -1, 1])
 
-    _fast = "policies/gpr_walking.kinfer"
-    _slow = "policies/gpr_0.5s_pawel.kinfer"
-    _weak = "policies/gpr_walking_weak.kinfer"
-    _pr126 = "policies/gpr_walking_pr126.kinfer"
-    _med_gait = "policies/74c91d8_0.4s.kinfer"
-    _standing = "policies/gpr_standing.kinfer"
-
-
-    # Imu tests
-    _noisy = "policies/noisy_imu_walking.kinfer"
-    _filtered = "policies/filtered_walking.kinfer"
-    _less_noise = "policies/less_noise.kinfer"
-
-    _noisy_small = "policies/noisy_small.kinfer"
-    _short_steps = "policies/short_steps.kinfer"
-
-    _normal_short_plane = "policies/normal_short_plane.kinfer"
-    _normal_short_trimesh = "policies/normal_short_trimesh.kinfer"
+    standing = "policies/gpr_standing.kinfer"
 
     controller = RealPPOController(
-        model_path=_normal_short_plane,
+        model_path=standing,
         joint_mapping_signs=wes_signs,
         check_default=True,
         kos=kos,
