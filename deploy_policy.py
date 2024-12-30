@@ -1,4 +1,11 @@
-""" Demo standing script. """
+""" Whoever is reading this, forgive us.
+
+TODO: check assumptions:
+# 1. Check if torque values throguh position contorl are the same - 
+# if not, we should pass straight torque value
+# 2. 
+
+"""
 import time
 
 import numpy as np
@@ -59,7 +66,13 @@ class RealPPOController:
         self.type_three_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [1, 2]]
         self.type_two_ids = [limb[id] for limb in [self.left_leg_ids, self.right_leg_ids] for id in [4]]
 
+        # self.all_ids = self.left_arm_ids + self.right_arm_ids
         self.all_ids = self.left_leg_ids + self.right_leg_ids
+
+        commands = [{"actuator_id": id, "position": 0} for id in self.all_ids]
+
+        self.kos.actuator.command_actuators(commands)
+
 
         # Configure all motors
         for id in self.type_four_ids:
@@ -85,13 +98,14 @@ class RealPPOController:
             angles.append([imu_data.x_angle, imu_data.y_angle, imu_data.z_angle])
             time.sleep(0.1)
 
-        self.angular_offset = np.array([0, 0, 0])
+        self.angular_offset = np.mean(angles, axis=0)
         print(f"IMU offset calculated: {self.angular_offset}")
 
         # Adjust for the sign of each joint
         self.left_offsets = self.joint_mapping_signs[:5] * np.array(self.model_info["default_standing"][:5])
         self.right_offsets = self.joint_mapping_signs[5:] * np.array(self.model_info["default_standing"][5:])
         self.offsets = np.concatenate([self.left_offsets, self.right_offsets])
+
         print(f"Offsets: {self.offsets}")
 
         # Initialize input state with dynamic sizes from metadata
@@ -175,7 +189,9 @@ class RealPPOController:
         ])
 
         joint_positions = np.deg2rad(joint_positions)
+
         joint_velocities = np.deg2rad(joint_velocities)
+
         joint_positions -= self.offsets
 
         joint_positions = self.joint_mapping_signs * joint_positions
@@ -238,7 +254,7 @@ class RealPPOController:
         self.buffer = outputs["x.3"]
 
         # Clip positions for safety
-        positions = np.clip(positions, -0.5, 0.5)
+        positions = np.clip(positions, -0.75, 0.75)
 
         positions = self.joint_mapping_signs * positions
 
@@ -247,7 +263,8 @@ class RealPPOController:
 
         # Send positions to robot
         self.move_actuators(expected_positions)
-
+        # self.set_default_position()
+        # self.set_zero_position()
         return positions
 
 
